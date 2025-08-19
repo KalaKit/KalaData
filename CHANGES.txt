@@ -1,18 +1,24 @@
-0.1:
+> 0.1
 - added CLI
 - added command system
 - added compression and decompression with LZSS and Huffman algorithm
 
-0.2:
-- can compress/decompress single file
-- AES-GCM encryption/decryption
-- faster match finder (hash-chain or binary-tree match finder)
-- per-file multithreading
-- chunk-based parallelism (split single large files into chunks and compress in parallel, one thread per chunk)
-- rolling hash in match finder (skip non-matching regions faster than byte-by-byte compare)  
-- SIMD/vectorized copies and match scans (use SSE/AVX/NEON to accelerate memory-heavy operations)  
-- buffered I/O with large block sizes or memory-mapped files (reduce system call overhead during read/write)
-- store code lengths (canonical form) and build a fixed-width or 2-level table for O(1) byte decode
+> 0.2
+general improvements:
+	
+	- archive header and per-file metadata layout revision for better memory/byte alignment
+	- can compress/decompress single file
+	- AES-GCM encryption/decryption
+
+speed improvements:
+	
+	- faster match finder (hash-chain or binary-tree match finder)
+	- per-file multithreading
+	- chunk-based parallelism (split single large files into chunks and compress in parallel, one thread per chunk)
+	- rolling hash in match finder (skip non-matching regions faster than byte-by-byte compare)  
+	- SIMD/vectorized copies and match scans (use SSE/AVX/NEON to accelerate memory-heavy operations)  
+	- buffered I/O with large block sizes or memory-mapped files (reduce system call overhead during read/write)
+	- store code lengths (canonical form) and build a fixed-width or 2-level table for O(1) byte decode
 
 ==========================================================
 UPCOMING CHANGES

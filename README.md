@@ -115,21 +115,44 @@ compression/decompression success log additional rows:
 
 ## KalaData Archive Layout
 
-### Header data
-| Offset | Size   | Field      | Description                        |
-|--------|--------|------------|------------------------------------|
-| 0x00   | 6 B    | magicVer   | Magic string + version (KDAT01)  |
-| 0x06   | 4 B    | fileCount  | Number of file entries (uint32)    |
+### Header data (aligned, 64 bytes enforced)
 
-### Metadata + file data
-| Offset (relative) | Size        | Field        | Description                                |
-|-------------------|-------------|--------------|--------------------------------------------|
-| +0x00             | 4 B         | pathLen      | Length of relative path string (uint32)    |
-| +0x04             | pathLen B   | relPath      | Relative path string (not null-terminated) |
-| +…                | 1 B         | method       | Storage flag (0 = raw, 1 = compressed)     |
-| +…                | 8 B         | originalSize | Size before compression (uint64)           |
-| +…                | 8 B         | storedSize   | Size after compression/raw (uint64)        |
-| +…                | storedSizeB | data         | File data (omitted if storedSize = 0)      |
+| Offset      | Size | Field      | Description                            |
+|-------------|------|------------|----------------------------------------|
+| 0x00        | 6 B  | magicVer   | Magic + version string ("KDAT01")      |
+| 0x06        | 2 B  | headerSize | Always = 64 (for parser sanity)        |
+| 0x08        | 4 B  | checkSum   | CRC32 checksum value for safety        |
+| 0x0C        | 4 B  | fileCount  | Number of file entries in archive      |
+| 0x10        | 8 B  | totalSize  | Sum of all stored sizes (payload only) |
+| 0x18        | 2 B  | flags      | Global archive flags                   |
+| 0x1A        | 12 B | aesNonce   | AES-GCM IV / nonce (valid if AES flag set, otherwise reserved) |
+| 0x26        | 16 B | aesTag     | AES-GCM authentication tag (valid if AES flag set, otherwise reserved) |
+| 0x36 - 0x40 | 10 B | reserved   | Reserved for future expansion          |
+
+### Global Flags Bitfield
+
+- Located at offset 0x18 (flags) in global
+- uses 16 bits
+
+| Bit    | Mask    | Name     | Meaning                                               |
+|--------|---------|----------|-------------------------------------------------------|
+| 0      | 0x0001  | AES      | AES-GCM enabled (data is ciphertext)                  |
+| 1      | 0x0002  | Solid    | Solid archive (all files compressed as one block)     |
+| 2      | 0x0004  | RawOnly  | Disable compression (store entries raw)               |
+| 3      | 0x0008  | isFolder | Archive source was a folder (1=folder, 0=single file) |
+| 4 - 15 | —       | Reserved | 14 bits free for expansion                            |
+
+### Per-file metadata (aligned)
+
+| Offset | Size  | Field        | Description                              |
+|--------|-------|--------------|------------------------------------------|
+| +0x00  | 8 B   | originalSize | Size before compression                  |
+| +0x08  | 8 B   | storedSize   | Size of raw/compressed file              |
+| +0x10  | 1 B   | method       | 0 = raw, 1 = Compressed, 2 += reserved   |
+| +0x11  | 3 B   | padding      | For 4-byte alignment                     |
+| +0x14  | 4 B   | pathLen      | Length of relative path string           |
+| +0x18  | N B   | relPath      | UTF-8 relative path (no null terminator) |
+| ...    | M B   | data         | File data (raw/compressed), ciphertext if AES enabled, omitted if storedSize = 0 |
 
 ## Notes
 - Archive always starts with `KDATxx` where `xx` is the version (01–99).
