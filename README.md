@@ -6,26 +6,28 @@
 
 ![Logo](logo.png)
 
-KalaData is a custom multithreaded compression and decompression tool written in C++20, built entirely from scratch without external dependencies.  
-It uses a hybrid LZSS + Huffman pipeline to compress data efficiently, while falling back to raw or empty storage when appropriate.  
+KalaData is a custom multithreaded compression and decompression CLI written in C++20, built entirely from scratch without external dependencies.
+
 All data is stored in a dedicated archival format with the `.kdat` extension.
 
 > Other uses of the `.kdat` extension in unrelated software do not work with KalaData.  
 KalaData archives have their own internal structure, designed specifically for this tool.
 
 ## Features
-- Independent archive format `.kdat`, not based on `ZIP`, `RAR`, `7z` or other archival formats.
+- Independent archive format `.kdat`, not based on `ZIP`, `RAR`, `7z` or other archival formats
 - Hybrid compression:
-  - LZSS for dictionary-based redundancy removal.
-  - Huffman coding for entropy reduction.
+  - LZSS for dictionary-based redundancy removal
+  - Huffman coding for entropy reduction
 - Storage modes:
-  - Compressed (LZSS + Huffman).
-  - Raw (when compression is not effective).
-  - Empty (for 0-byte files).
-- Verbose logging (--tvb) with detailed per-file reporting.
-- Summary statistics: input and output sizes, ratios, throughput (MB/s), file counts, and total duration.
-- Cross-platform support for Windows 10/11 and Linux.
-- No third-party libraries; relies only on the C++ Standard Library.
+  - Compressed (LZSS + Huffman)
+  - Raw (when compression is not effective)
+  - Empty (for 0-byte files)
+- Verbose logging with detailed per-file reporting.
+- Summary statistics: input and output sizes, ratios, throughput (MB/s), file counts, and total duration
+- Cross-platform support for Windows 10/11 and Linux
+- No third-party libraries; relies only on the C++ Standard Library
+
+---
 
 ## Usage Model
 
@@ -33,8 +35,7 @@ KalaData supports two modes of operation:
 
 1. **Direct mode**  
    Launch KalaData with a command from the system shell.  
-   Example:  
-   `KalaData.exe --c project_directory project.kdat`  
+   Example: `KalaData.exe --c project_directory project.kdat`  
    This executes the command and then enters the KalaData CLI environment.
 
 2. **Interactive mode**  
@@ -45,32 +46,10 @@ Note: KalaData does not support command piping or chaining. Commands must be giv
 
 ---
 
-## Multithreading
-
-If file size <= 16MB - one thread allocated for this file
-	- main thread is reserved for small files
-	
-If file size > 16MB - split into chunks and allocate one thread per chunk (4MB - 16MB)
-	- dynamic chunk size = file size / (numThreads * 2).
-	- numThreads = cpu cores (x2 if hyperthreaded)
-		
-Sort files by size so larger files are compressed/decompressed first
-	- store priority index during compression into each file metadata so decompression can use it without sorting again
-	- store file relative path and size in vector of structs, sort descending by size
-	- start with largest file and allocate all idle threads to it
-	- the remaining idle threads are allocated to the largest active file new chunk only if it needs one
-		
-Thread limits based on available threads
-	- <= 4 threads - one thread per file
-	- > 4 and <= 8 threads - max four threads per file
-	- > 8 threads - max 8 threads per file
-
----
-
 ## Commands
 
 ### Notes:
-  - KalaData accepts relative paths to current directory (or directory set with --go) or absolute paths.
+  - KalaData accepts relative paths to its executable directory, directory set with `--go` or absolute paths
   - the command `-help command` expects a valid command, like `--help c`
   - the command `--go path` expects a valid path in your device
   - the command `--sm mode` expects a valid mode, like `--sm balanced`
@@ -96,6 +75,47 @@ Thread limits based on available threads
 
 ---
 
+## Compression
+
+The `--c` command takes in a directory which will be compressed into a `.kdat` file inside the target path parent directory.
+
+Requirements and restrictions:
+
+Origin:
+  - path must exist
+  - path must be a directory
+  - directory must not be empty
+  - directory size must not exceed 5GB
+
+Target:
+  - path must not exist
+  - path must have the `.kdat` extension
+  - path parent directory must be writable
+
+> Example: `KalaData.exe --c C:\Projects\MyApp C:\Archives\MyApp.kdat`
+
+---
+
+## Decompression
+
+The `--dc` command takes in a compressed `.kdat` file path which will be decompressed inside the target directory.
+
+Requirements and restrictions:
+
+Origin:
+  - path must exist
+  - path must be a regular file
+  - path must have the `.kdat` extension
+
+Target:
+  - path must exist
+  - path must be a directory
+  - directory must be writable
+
+> Example: `KalaData.exe --dc C:\Archives\MyApp.kdat C:\Extracted\MyApp`
+
+---
+
 ## Available compression modes
 
 Note: All modes share the same min_match value `3`.
@@ -109,6 +129,28 @@ Note: All modes share the same min_match value `3`.
 | balanced | General use         | 256 KB      | 64        |
 | slow     | Long-term storage   | 1 MB        | 128       |
 | archive  | Maximum compression | 8 MB        | 255       |
+
+---
+
+## Multithreading
+
+If file size <= 16MB - one thread allocated for this file
+- main thread is reserved for small files
+	
+If file size > 16MB - split into chunks and allocate one thread per chunk (4MB - 16MB)
+- dynamic chunk size = file size / (numThreads * 2).
+- numThreads = cpu cores (x2 if hyperthreaded)
+		
+Sort files by size so larger files are compressed/decompressed first
+- store priority index during compression into each file metadata so decompression can use it without sorting again
+- store file relative path and size in vector of structs, sort descending by size
+- start with largest file and allocate all idle threads to it
+- the remaining idle threads are allocated to the largest active file new chunk only if it needs one
+		
+Thread limits based on available threads
+- <= 4 - one thread per file
+- 4 - 8 - max four threads per file
+- \> 8 - max 8 threads per file
 
 ---
 
@@ -187,45 +229,6 @@ compression/decompression success log additional rows:
 - Empty files are represented with `originalSize = 0` and `storedSize = 0`.
 
 ---
-
-## Compression
-
-The `--c` command takes in a directory which will be compressed into a `.kdat` file inside the target path parent directory.
-
-Requirements and restrictions:
-
-Origin:
-  - path must exist
-  - path must be a directory
-  - directory must not be empty
-  - directory size must not exceed 5GB
-
-Target:
-  - path must not exist
-  - path must have the `.kdat` extension
-  - path parent directory must be writable
-
-> Example: `KalaData.exe --c C:\Projects\MyApp C:\Archives\MyApp.kdat`
-
----
-
-## Decompression
-
-The `--dc` command takes in a compressed `.kdat` file path which will be decompressed inside the target directory.
-
-Requirements and restrictions:
-
-Origin:
-  - path must exist
-  - path must be a regular file
-  - path must have the `.kdat` extension
-
-Target:
-  - path must exist
-  - path must be a directory
-  - directory must be writable
-
-> Example: `KalaData.exe --dc C:\Archives\MyApp.kdat C:\Extracted\MyApp`
 
 ## Prerequisites for building from source
 
