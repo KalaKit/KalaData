@@ -12,8 +12,8 @@
 #include "command.hpp"
 #include "core.hpp"
 
-using KalaData::Core;
-using KalaData::Command;
+using KalaData::Core::KalaDataCore;
+using KalaData::Core::Command;
 
 using std::string;
 using std::cout;
@@ -50,5 +50,5 @@ int main(int argc, char* argv[])
 		Command::HandleCommand(commands);
 	}
 
-	Core::Update();
+	KalaDataCore::Update();
 }

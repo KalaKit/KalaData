@@ -5,20 +5,58 @@
 
 #include <string>
 #include <algorithm>
+#include <memory>
 
-namespace KalaData
+namespace KalaData::Compression
 {
 	using std::string;
 	using std::clamp;
+	using std::unique_ptr;
 
-	enum class ForceCloseType
+	struct Token
 	{
-		TYPE_COMPRESSION,
-		TYPE_DECOMPRESSION,
-		TYPE_COMPRESSION_BUFFER,
-		TYPE_DECOMPRESSION_BUFFER,
-		TYPE_HUFFMAN_ENCODE,
-		TYPE_HUFFMAN_DECODE
+		bool isLiteral;
+		uint8_t literal;
+		uint32_t offset;
+		uint8_t length;
+	};
+
+	//Huffman tree node
+	struct HuffNode
+	{
+		uint8_t symbol;
+		size_t freq;
+		unique_ptr<HuffNode> left;
+		unique_ptr<HuffNode> right;
+
+		HuffNode(
+			uint8_t s,
+			size_t f) :
+			symbol(s),
+			freq(f),
+			left(nullptr),
+			right(nullptr) {
+		}
+
+		HuffNode(
+			unique_ptr<HuffNode> l,
+			unique_ptr<HuffNode> r) :
+			symbol(0),
+			freq(l->freq + r->freq),
+			left(move(l)),
+			right(move(r)) {
+		}
+
+	};
+
+	struct NodeCompare
+	{
+		bool operator()(
+			const unique_ptr<HuffNode>& a,
+			const unique_ptr<HuffNode>& b) const
+		{
+			return a->freq > b->freq;
+		}
 	};
 
 	constexpr size_t WINDOW_SIZE_FASTEST  = static_cast<size_t>(4 * 1024);        //4KB
@@ -35,7 +73,7 @@ namespace KalaData
 
 	constexpr size_t MIN_MATCH = 3;
 
-	class Compression
+	class Archive
 	{
 	public:
 		//Assign a new window size value.
@@ -67,19 +105,15 @@ namespace KalaData
 		};
 		static size_t GetLookAhead() { return LOOKAHEAD; }
 
-		static void ForceClose(
-			const string& message,
-			ForceCloseType type);
-
 		//Compresses selected folder straight to .kdat archive inside target folder,
 		//skips all safety checks that are handled in the Command class for the Compress command
-		static void CompressToArchive(
+		static void Compress(
 			const string& origin,
 			const string& target);
 
 		//Decompresses selected .kdat archive straight to selected target folder,
 		//skips all safety checks that are handled in the Command class for the Decompress command
-		static void DecompressToFolder(
+		static void Decompress(
 			const string& origin,
 			const string& target);
 	private:

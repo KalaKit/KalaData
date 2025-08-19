@@ -5,7 +5,7 @@
 
 #include <string>
 
-namespace KalaData
+namespace KalaData::Core
 {
 	using std::string;
 
@@ -13,6 +13,16 @@ namespace KalaData
 	{
 		SHUTDOWN_REGULAR,
 		SHUTDOWN_CRITICAL
+	};
+
+	enum class ForceCloseType
+	{
+		TYPE_COMPRESSION,
+		TYPE_DECOMPRESSION,
+		TYPE_COMPRESSION_BUFFER,
+		TYPE_DECOMPRESSION_BUFFER,
+		TYPE_HUFFMAN_ENCODE,
+		TYPE_HUFFMAN_DECODE
 	};
 
 	enum class MessageType
@@ -24,7 +34,7 @@ namespace KalaData
 		MESSAGETYPE_SUCCESS
 	};
 
-	class Core
+	class KalaDataCore
 	{
 	public:
 		//Toggle compression verbose messages on and off
@@ -41,6 +51,11 @@ namespace KalaData
 
 		//Shut down and close because this is a bad scenario and should never happen
 		static void ForceClose(const string& title, const string& message);
+
+		//Can force close by selected type (type assigns error popup messagebox title)
+		static void ForceCloseByType(
+			const string& message,
+			ForceCloseType type);
 
 		//Shut down KalaData, optional critical shutdown uses quick_exit
 		static void Shutdown(ShutdownState state = ShutdownState::SHUTDOWN_REGULAR);

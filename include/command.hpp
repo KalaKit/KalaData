@@ -6,7 +6,7 @@
 #include <vector>
 #include <string>
 
-namespace KalaData
+namespace KalaData::Core
 {
 	using std::vector;
 	using std::string;
