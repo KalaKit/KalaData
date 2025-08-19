@@ -11,6 +11,16 @@ namespace KalaData
 	using std::string;
 	using std::clamp;
 
+	enum class ForceCloseType
+	{
+		TYPE_COMPRESSION,
+		TYPE_DECOMPRESSION,
+		TYPE_COMPRESSION_BUFFER,
+		TYPE_DECOMPRESSION_BUFFER,
+		TYPE_HUFFMAN_ENCODE,
+		TYPE_HUFFMAN_DECODE
+	};
+
 	constexpr size_t WINDOW_SIZE_FASTEST  = static_cast<size_t>(4 * 1024);        //4KB
 	constexpr size_t WINDOW_SIZE_FAST     = static_cast<size_t>(32 * 1024);       //32KB
 	constexpr size_t WINDOW_SIZE_BALANCED = static_cast<size_t>(256 * 1024);      //256KB
@@ -23,7 +33,9 @@ namespace KalaData
 	constexpr size_t LOOKAHEAD_SLOW     = 128;
 	constexpr size_t LOOKAHEAD_ARCHIVE  = 255;
 
-	class Compress
+	constexpr size_t MIN_MATCH = 3;
+
+	class Compression
 	{
 	public:
 		//Assign a new window size value.
@@ -54,6 +66,10 @@ namespace KalaData
 			LOOKAHEAD = clamped;
 		};
 		static size_t GetLookAhead() { return LOOKAHEAD; }
+
+		static void ForceClose(
+			const string& message,
+			ForceCloseType type);
 
 		//Compresses selected folder straight to .kdat archive inside target folder,
 		//skips all safety checks that are handled in the Command class for the Compress command

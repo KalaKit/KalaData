@@ -17,7 +17,7 @@
 
 #include "core.hpp"
 #include "command.hpp"
-#include "compress.hpp"
+#include "compression.hpp"
 
 using KalaData::Core;
 using KalaData::MessageType;

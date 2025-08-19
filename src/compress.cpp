@@ -16,11 +16,12 @@
 
 #include "core.hpp"
 #include "command.hpp"
-#include "compress.hpp"
+#include "compression.hpp"
 
 using KalaData::Core;
 using KalaData::MessageType;
-using KalaData::Compress;
+using KalaData::Compression;
+using KalaData::ForceCloseType;
 
 using std::filesystem::path;
 using std::filesystem::create_directories;
@@ -51,18 +52,6 @@ using std::move;
 using std::make_unique;
 using std::memcmp;
 using std::exception;
-
-constexpr size_t MIN_MATCH = 3;
-
-enum class ForceCloseType
-{
-	TYPE_COMPRESSION,
-	TYPE_DECOMPRESSION,
-	TYPE_COMPRESSION_BUFFER,
-	TYPE_DECOMPRESSION_BUFFER,
-	TYPE_HUFFMAN_ENCODE,
-	TYPE_HUFFMAN_DECODE
-};
 
 struct Token
 {
@@ -108,10 +97,6 @@ struct NodeCompare
 	}
 };
 
-static void ForceClose(
-	const string& message,
-	ForceCloseType type);
-
 //Compress a single buffer into an already open stream
 static vector<uint8_t> CompressBuffer(
 	const vector<uint8_t>& input,
@@ -143,7 +128,7 @@ static vector<uint8_t> HuffmanDecode(
 
 namespace KalaData
 {
-	void Compress::CompressToArchive(
+	void Compression::CompressToArchive(
 		const string& origin,
 		const string& target)
 	{
@@ -371,7 +356,7 @@ namespace KalaData
 		Command::SetCommandAllowState(true);
 	}
 
-	void Compress::DecompressToFolder(
+	void Compression::DecompressToFolder(
 		const string& origin,
 		const string& target)
 	{
@@ -722,45 +707,45 @@ namespace KalaData
 
 		Command::SetCommandAllowState(true);
 	}
-}
 
-void ForceClose(
-	const string& message,
-	ForceCloseType type)
-{
-	string title{};
-
-	switch (type)
+	void Compression::ForceClose(
+		const string& message,
+		ForceCloseType type)
 	{
-	case ForceCloseType::TYPE_COMPRESSION:
-		title = "Compression error";
-		break;
-	case ForceCloseType::TYPE_DECOMPRESSION:
-		title = "Decompression error";
-		break;
-	case ForceCloseType::TYPE_COMPRESSION_BUFFER:
-		title = "Compression buffer error";
-		break;
-	case ForceCloseType::TYPE_DECOMPRESSION_BUFFER:
-		title = "Decompression buffer error";
-		break;
-	case ForceCloseType::TYPE_HUFFMAN_ENCODE:
-		title = "Huffman encode error";
-		break;
-	case ForceCloseType::TYPE_HUFFMAN_DECODE:
-		title = "Huffman decode error";
-		break;
-	}
+		string title{};
 
-	Core::ForceClose(title, message);
+		switch (type)
+		{
+		case ForceCloseType::TYPE_COMPRESSION:
+			title = "Compression error";
+			break;
+		case ForceCloseType::TYPE_DECOMPRESSION:
+			title = "Decompression error";
+			break;
+		case ForceCloseType::TYPE_COMPRESSION_BUFFER:
+			title = "Compression buffer error";
+			break;
+		case ForceCloseType::TYPE_DECOMPRESSION_BUFFER:
+			title = "Decompression buffer error";
+			break;
+		case ForceCloseType::TYPE_HUFFMAN_ENCODE:
+			title = "Huffman encode error";
+			break;
+		case ForceCloseType::TYPE_HUFFMAN_DECODE:
+			title = "Huffman decode error";
+			break;
+		}
+
+		Core::ForceClose(title, message);
+	}
 }
 
 vector<uint8_t> CompressBuffer(
 	const vector<uint8_t>& input,
 	const string& origin)
 {
-	size_t windowSize = Compress::GetWindowSize();
-	size_t lookAhead = Compress::GetLookAhead();
+	size_t windowSize = Compression::GetWindowSize();
+	size_t lookAhead = Compression::GetLookAhead();
 
 	vector<uint8_t> output{};
 
@@ -787,18 +772,18 @@ vector<uint8_t> CompressBuffer(
 			}
 
 			if (length > bestLength
-				&& length >= MIN_MATCH)
+				&& length >= KalaData::MIN_MATCH)
 			{
 				bestLength = length;
 				bestOffset = pos - i;
 			}
 		}
 
-		if (bestLength >= MIN_MATCH)
+		if (bestLength >= KalaData::MIN_MATCH)
 		{
 			if (bestOffset >= UINT32_MAX)
 			{
-				ForceClose(
+				Compression::ForceClose(
 					"Offset too large for file '" + origin + "' during compressing (data window exceeded)!\n",
 					ForceCloseType::TYPE_COMPRESSION_BUFFER);
 
@@ -815,7 +800,7 @@ vector<uint8_t> CompressBuffer(
 
 			if (bestLength > UINT8_MAX)
 			{
-				ForceClose(
+				Compression::ForceClose(
 					"Match length too large for file '" + origin + "' during compressing (overflow)!\n",
 					ForceCloseType::TYPE_COMPRESSION_BUFFER);
 
@@ -838,7 +823,7 @@ vector<uint8_t> CompressBuffer(
 
 	if (output.empty())
 	{
-		ForceClose(
+		Compression::ForceClose(
 			"Compression produced empty output for file '" + origin + "' (unexpected)!\n",
 			ForceCloseType::TYPE_COMPRESSION_BUFFER);
 	}
@@ -872,7 +857,7 @@ void DecompressBuffer(
 		{
 			if (pos >= lzssStream.size())
 			{
-				ForceClose(
+				Compression::ForceClose(
 					"Unexpected end of LZSS stream while reading literal in '" + target + "'!\n",
 					ForceCloseType::TYPE_DECOMPRESSION_BUFFER);
 
@@ -886,7 +871,7 @@ void DecompressBuffer(
 		{
 			if (pos + sizeof(uint16_t) + sizeof(uint8_t) > lzssStream.size())
 			{
-				ForceClose(
+				Compression::ForceClose(
 					"Unexpected end of LZSS stream while reading reference in '" + target + "'!\n",
 					ForceCloseType::TYPE_DECOMPRESSION_BUFFER);
 
@@ -904,7 +889,7 @@ void DecompressBuffer(
 
 				ss << "Offset size is '0' in LZSS stream for archive '" << target << "' (corruption suspected)!\n";
 
-				ForceClose(
+				Compression::ForceClose(
 					ss.str(),
 					ForceCloseType::TYPE_DECOMPRESSION_BUFFER);
 
@@ -917,7 +902,7 @@ void DecompressBuffer(
 				ss << "Offset size '" << offset << "' is bigger than buffer size '"
 					<< buffer.size() << "' in LZSS stream for archive '" << target << "' (corruption suspected)!\n";
 
-				ForceClose(
+				Compression::ForceClose(
 					ss.str(),
 					ForceCloseType::TYPE_DECOMPRESSION_BUFFER);
 
@@ -935,7 +920,7 @@ void DecompressBuffer(
 						<< "exceeds expected size '" << originalSize << "' "
 						<< "while reading archive '" << target << "'!\n";
 
-					ForceClose(
+					Compression::ForceClose(
 						ss.str(),
 						ForceCloseType::TYPE_DECOMPRESSION_BUFFER);
 
@@ -954,7 +939,7 @@ void DecompressBuffer(
 			<< "' does not match expected size '" << originalSize
 			<< "' for archive '" << target << "' (possible corruption)!\n";
 
-		ForceClose(
+		Compression::ForceClose(
 			ss.str(),
 			ForceCloseType::TYPE_DECOMPRESSION_BUFFER);
 
@@ -997,7 +982,7 @@ vector<uint8_t> HuffmanEncode(
 	}
 	if (pq.empty())
 	{
-		ForceClose(
+		Compression::ForceClose(
 			"HuffmanEncode found no symbols in '" + origin + "'",
 			ForceCloseType::TYPE_HUFFMAN_ENCODE);
 
@@ -1038,7 +1023,7 @@ vector<uint8_t> HuffmanEncode(
 	constexpr size_t entrySize = 5;
 	if (nonZero > (SIZE_MAX - sizeof(uint16_t)) / entrySize)
 	{
-		ForceClose(
+		Compression::ForceClose(
 			"Sparse size overflow in '" + origin + "'!\n",
 			ForceCloseType::TYPE_HUFFMAN_ENCODE);
 
@@ -1099,7 +1084,7 @@ vector<uint8_t> HuffmanEncode(
 		const auto it = codes.find(b);
 		if (it == codes.end())
 		{
-			ForceClose(
+			Compression::ForceClose(
 				"HuffmanEncode missing code for symbol in '" + origin + "'!\n",
 				ForceCloseType::TYPE_HUFFMAN_ENCODE);
 
@@ -1132,7 +1117,7 @@ vector<uint8_t> HuffmanEncode(
 
 	if (output.empty())
 	{
-		ForceClose(
+		Compression::ForceClose(
 			"HuffmanEncode produced empty output for '" + origin + "'!\n",
 			ForceCloseType::TYPE_HUFFMAN_ENCODE);
 
@@ -1151,7 +1136,7 @@ vector<uint8_t> HuffmanDecode(
 
 	if (storedSize < 2)
 	{
-		ForceClose(
+		Compression::ForceClose(
 			"Stored size is too small in '" + origin + "'!\n",
 			ForceCloseType::TYPE_HUFFMAN_DECODE);
 
@@ -1162,7 +1147,7 @@ vector<uint8_t> HuffmanDecode(
 	uint8_t mode{};
 	if (!in.read((char*)&mode, sizeof(uint8_t)))
 	{
-		ForceClose(
+		Compression::ForceClose(
 			"Unexpected EOF while reading Huffman storage mode in '" + origin + "'!\n",
 			ForceCloseType::TYPE_HUFFMAN_DECODE);
 
@@ -1178,7 +1163,7 @@ vector<uint8_t> HuffmanDecode(
 		
 		if (!in.read((char*)&nonZero, sizeof(uint16_t)))
 		{
-			ForceClose(
+			Compression::ForceClose(
 				"Unexpected EOF while reading Huffman table size in '" + origin + "'!\n",
 				ForceCloseType::TYPE_HUFFMAN_DECODE);
 
@@ -1193,7 +1178,7 @@ vector<uint8_t> HuffmanDecode(
 			if (!in.read((char*)&symbol, sizeof(uint8_t))
 				|| !in.read((char*)&f, sizeof(uint32_t)))
 			{
-				ForceClose(
+				Compression::ForceClose(
 					"Unexpected EOF while reading Huffman sparse table entry in '" + origin + "'!\n",
 					ForceCloseType::TYPE_HUFFMAN_DECODE);
 
@@ -1210,7 +1195,7 @@ vector<uint8_t> HuffmanDecode(
 			uint32_t f{};
 			if (!in.read((char*)&f, sizeof(uint32_t)))
 			{
-				ForceClose(
+				Compression::ForceClose(
 					"Unexpected EOF while reading Huffman dense table entry in '" + origin + "'!\n",
 					ForceCloseType::TYPE_HUFFMAN_DECODE);
 
@@ -1233,7 +1218,7 @@ vector<uint8_t> HuffmanDecode(
 	}
 	if (pq.empty())
 	{
-		ForceClose(
+		Compression::ForceClose(
 			"Found empty frequency table in '" + origin + "'!\n",
 			ForceCloseType::TYPE_HUFFMAN_DECODE);
 
@@ -1277,7 +1262,7 @@ vector<uint8_t> HuffmanDecode(
 	vector<uint8_t> bitstream(remaining);
 	if (!in.read((char*)bitstream.data(), remaining))
 	{
-		ForceClose(
+		Compression::ForceClose(
 			"Unexpected EOF while reading Huffman bitstream in '" + origin + "'!\n",
 			ForceCloseType::TYPE_HUFFMAN_DECODE);
 
@@ -1307,7 +1292,7 @@ vector<uint8_t> HuffmanDecode(
 
 	if (out.size() != totalSymbols)
 	{
-		ForceClose(
+		Compression::ForceClose(
 			"Output size mismatch in '" + origin + "'!\n",
 			ForceCloseType::TYPE_HUFFMAN_DECODE);
 
