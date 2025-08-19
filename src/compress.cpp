@@ -50,6 +50,7 @@ using std::unique_ptr;
 using std::move;
 using std::make_unique;
 using std::memcmp;
+using std::exception;
 
 constexpr size_t MIN_MATCH = 3;
 
@@ -411,7 +412,21 @@ namespace KalaData
 		}
 
 		//check version range
-		int version = stoi(string(magicVer + 4, 2));
+		int version = 0;
+
+		try
+		{
+			version = stoi(string(magicVer + 4, 2));
+		}
+		catch (const exception& e)
+		{
+			ForceClose(
+				"Failed to get version from archive '" + origin + "'! Reason: " + e.what() + "\n",
+				ForceCloseType::TYPE_DECOMPRESSION);
+
+			return;
+		}
+
 		if (version < 1
 			|| version > 99)
 		{
@@ -426,7 +441,7 @@ namespace KalaData
 		if (version == 1)
 		{
 			ForceClose(
-				"Outdated version '0.1' in archive '" + origin + "' is no longer supported! Use KalaData 0.2 or newer to decompress this '.kdat' archive.\n",
+				"Outdated version '01' in archive '" + origin + "' is no longer supported! Use KalaData 0.2 or newer to decompress this '.kdat' archive.\n",
 				ForceCloseType::TYPE_DECOMPRESSION);
 
 			return;
