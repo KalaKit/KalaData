@@ -23,8 +23,11 @@ using KalaData::Core::Command;
 using KalaData::Core::MessageType;
 using KalaData::Core::ForceCloseType;
 using KalaData::Compression::Archive;
+using KalaData::Compression::Token;
 using KalaData::Compression::HuffNode;
+using KalaData::Compression::HuffNode32;
 using KalaData::Compression::NodeCompare;
+using KalaData::Compression::NodeCompare32;
 
 using std::filesystem::path;
 using std::filesystem::create_directories;
@@ -46,25 +49,100 @@ using std::chrono::seconds;
 using std::fixed;
 using std::setprecision;
 using std::map;
+using std::exception;
+using std::fill;
+using std::memcpy;
 using std::priority_queue;
 using std::unique_ptr;
-using std::move;
 using std::make_unique;
-using std::memcmp;
-using std::exception;
+using std::move;
 
-//Decompress from an already open stream into a buffer
-static void DecompressBuffer(
-	const vector<uint8_t>& lzssStream,
-	vector<uint8_t>& out,
+//Rebuild raw data from tokens list
+static vector<uint8_t> DecompressFromTokens(
+	const vector<Token>& tokens,
 	size_t originalSize,
 	const string& target);
 
-//Pre-LSZZ filter
-static vector<uint8_t> HuffmanDecode(
-	ifstream& in,
-	size_t storedSize,
+//Unwrap Huffman stream into LZSS tokens
+static vector<Token> HuffmanDecodeTokens(
+	const vector<uint8_t>& input,
 	const string& origin);
+
+//Build tree root for traversal for literals or lengths (1 byte)
+static unique_ptr<HuffNode> BuildTree(
+	const size_t freq[],
+	size_t count);
+
+//Build tree root for traversal for offsets (4 bytes)
+static unique_ptr<HuffNode32> BuildTree32(
+	const map<uint32_t, size_t>& freqMap);
+
+//Derializes a frequency table (literals or lengths) from the input stream (1 byte)
+static void ReadTable(
+	const uint8_t*& ptr,
+	size_t freq[],
+	size_t count);
+
+//Deserializes a frequency table (offsets) from the input stream (4 bytes)
+static void ReadTable32(
+	const uint8_t*& ptr,
+	map<uint32_t, size_t>& offFreq);
+
+//Utility class for reading bit-packed Huffman input stream
+struct BitReader
+{
+	const uint8_t* data;
+	size_t size;
+	size_t pos = 0; //byte index
+	int count = 0;  //remaining bits in buffer
+	uint8_t buffer = 0;
+
+	BitReader(
+		const uint8_t* d,
+		size_t s) :
+		data(d),
+		size(s) {}
+
+	//read a single bit
+	int ReadBit()
+	{
+		if (count == 0)
+		{
+			if (pos >= size) return -1; //EOF
+			buffer = data[pos++];
+			count = 8;
+		}
+
+		int bit = (buffer & 0x80) ? 1 : 0; //read MSB first
+		buffer <<= 1;
+		count--;
+		return bit;
+	}
+
+	//Read a sequence of bits into a string for Huffman decoding
+	string ReadCode(const map<string, uint8_t>& table)
+	{
+		string code{};
+
+		while (true)
+		{
+			int b = ReadBit();
+			if (b == -1) break; //EOF
+
+			code.push_back(b ? '1' : '0');
+
+			auto it = table.find(code);
+			if (it != table.end()) return code; //found a complete code
+		}
+		return ""; //not found or EOF
+	}
+
+	bool EndOfStream() const
+	{
+		return (pos >= size
+			&& count == 0);
+	}
+};
 
 namespace KalaData::Compression
 {
@@ -325,15 +403,15 @@ namespace KalaData::Compression
 					KalaDataCore::PrintMessage(ss.str());
 				}
 
-				vector<uint8_t> lzssStream = HuffmanDecode(
-					in,
-					static_cast<size_t>(storedSize),
+				vector<uint8_t> compressedBytes(storedSize);
+				in.read(reinterpret_cast<char*>(compressedBytes.data()), storedSize);
+
+				vector<Token> tokens = HuffmanDecodeTokens(
+					compressedBytes,
 					origin);
 
-				//decompress
-				DecompressBuffer(
-					lzssStream,
-					data,
+				vector<uint8_t> data = DecompressFromTokens(
+					tokens,
 					static_cast<size_t>(originalSize),
 					origin);
 			}
@@ -361,6 +439,7 @@ namespace KalaData::Compression
 				KalaDataCore::ForceCloseByType(
 					"Failed to extract file '" + relPath + "' from archive '" + origin + "' into target folder '" + target + "'!\n",
 					ForceCloseType::TYPE_DECOMPRESSION);
+
 				return;
 			}
 
@@ -421,296 +500,285 @@ namespace KalaData::Compression
 	}
 }
 
-void DecompressBuffer(
-	const vector<uint8_t>& lzssStream,
-	vector<uint8_t>& out,
+vector<uint8_t> DecompressFromTokens(
+	const vector<Token>& tokens,
 	size_t originalSize,
 	const string& target)
 {
-	//skip decompressing empty file
-	if (originalSize == 0)
+	vector<uint8_t> output{};
+	output.reserve(originalSize);
+
+	for (const auto& t : tokens)
 	{
-		out.clear();
-		return;
-	}
-
-	vector<uint8_t> buffer{};
-	buffer.reserve(originalSize);
-
-	size_t pos = 0;
-
-	while (pos < lzssStream.size())
-	{
-		uint8_t flag = lzssStream[pos++];
-
-		if (flag == 1) //literal
+		if (t.isLiteral)
 		{
-			if (pos >= lzssStream.size())
-			{
-				KalaDataCore::ForceCloseByType(
-					"Unexpected end of LZSS stream while reading literal in '" + target + "'!\n",
-					ForceCloseType::TYPE_DECOMPRESSION_BUFFER);
-
-				return;
-			}
-
-			uint8_t c = lzssStream[pos++];
-			buffer.push_back(c);
+			//just push the byte
+			output.push_back(t.literal);
 		}
-		else //reference
+		else
 		{
-			if (pos + sizeof(uint16_t) + sizeof(uint8_t) > lzssStream.size())
+			//ensure offset/length are valid
+			if (t.offset == 0
+				|| t.offset > output.size())
 			{
 				KalaDataCore::ForceCloseByType(
-					"Unexpected end of LZSS stream while reading reference in '" + target + "'!\n",
+					"Invalid offset while decompressing file '" + target + "'!\n",
 					ForceCloseType::TYPE_DECOMPRESSION_BUFFER);
-
-				return;
-			}
-
-			uint32_t offset = *reinterpret_cast<const uint32_t*>(&lzssStream[pos]);
-			pos += sizeof(uint32_t);
-
-			uint8_t length = lzssStream[pos++];
-
-			if (offset == 0)
-			{
-				ostringstream ss{};
-
-				ss << "Offset size is '0' in LZSS stream for archive '" << target << "' (corruption suspected)!\n";
-
-				KalaDataCore::ForceCloseByType(
-					ss.str(),
-					ForceCloseType::TYPE_DECOMPRESSION_BUFFER);
-
-				return;
-			}
-			if (offset > buffer.size())
-			{
-				ostringstream ss{};
-
-				ss << "Offset size '" << offset << "' is bigger than buffer size '"
-					<< buffer.size() << "' in LZSS stream for archive '" << target << "' (corruption suspected)!\n";
-
-				KalaDataCore::ForceCloseByType(
-					ss.str(),
-					ForceCloseType::TYPE_DECOMPRESSION_BUFFER);
-
-				return;
-			}
-
-			size_t start = buffer.size() - offset;
-			for (size_t i = 0; i < length; i++)
-			{
-				if (buffer.size() >= originalSize)
-				{
-					ostringstream ss{};
-
-					ss << "Decompressed size '" << buffer.size() << "' "
-						<< "exceeds expected size '" << originalSize << "' "
-						<< "while reading archive '" << target << "'!\n";
-
-					KalaDataCore::ForceCloseByType(
-						ss.str(),
-						ForceCloseType::TYPE_DECOMPRESSION_BUFFER);
-
-					return;
-				}
-				buffer.push_back(buffer[start + i]);
-			}
-		}
-	}
-
-	if (buffer.size() != originalSize)
-	{
-		ostringstream ss{};
-
-		ss << "Decompressed size '" << buffer.size()
-			<< "' does not match expected size '" << originalSize
-			<< "' for archive '" << target << "' (possible corruption)!\n";
-
-		KalaDataCore::ForceCloseByType(
-			ss.str(),
-			ForceCloseType::TYPE_DECOMPRESSION_BUFFER);
-
-		return;
-	}
-
-	//hand decompressed data back to caller
-	out = move(buffer);
-}
-
-vector<uint8_t> HuffmanDecode(
-	ifstream& in,
-	size_t storedSize,
-	const string& origin)
-{
-	vector<uint8_t> out{};
-
-	if (storedSize < 2)
-	{
-		KalaDataCore::ForceCloseByType(
-			"Stored size is too small in '" + origin + "'!\n",
-			ForceCloseType::TYPE_HUFFMAN_DECODE);
-
-		return {};
-	}
-
-	//read storage mode flag
-	uint8_t mode{};
-	if (!in.read((char*)&mode, sizeof(uint8_t)))
-	{
-		KalaDataCore::ForceCloseByType(
-			"Unexpected EOF while reading Huffman storage mode in '" + origin + "'!\n",
-			ForceCloseType::TYPE_HUFFMAN_DECODE);
-
-		return {};
-	}
-
-	size_t freq[256]{};
-	uint16_t nonZero = 0;
-
-	if (mode == 1)
-	{
-		//read nonZero count
-
-		if (!in.read((char*)&nonZero, sizeof(uint16_t)))
-		{
-			KalaDataCore::ForceCloseByType(
-				"Unexpected EOF while reading Huffman table size in '" + origin + "'!\n",
-				ForceCloseType::TYPE_HUFFMAN_DECODE);
-
-			return {};
-		}
-
-		//read each (symbol, freq)
-		for (uint16_t i = 0; i < nonZero; i++)
-		{
-			uint8_t symbol{};
-			uint32_t f{};
-			if (!in.read((char*)&symbol, sizeof(uint8_t))
-				|| !in.read((char*)&f, sizeof(uint32_t)))
-			{
-				KalaDataCore::ForceCloseByType(
-					"Unexpected EOF while reading Huffman sparse table entry in '" + origin + "'!\n",
-					ForceCloseType::TYPE_HUFFMAN_DECODE);
 
 				return {};
 			}
+
+			if (t.length == 0)
+			{
+				KalaDataCore::ForceCloseByType(
+					"Zero-length match while decompressing file '" + target + "'!\n",
+					ForceCloseType::TYPE_DECOMPRESSION_BUFFER);
+
+				return {};
+			}
+
+			//copy match from already written data
+
+			size_t start = output.size() - t.offset;
+			for (size_t i = 0; i < t.length; i++)
+			{
+				if (output.size() >= originalSize) break; //safety
+				output.push_back(output[start + i]);
+			}
+		}
+	}
+
+	if (output.size() != originalSize)
+	{
+		KalaDataCore::ForceCloseByType(
+			"Size mismatch while decompressing file '" + target + "'!\n",
+			ForceCloseType::TYPE_DECOMPRESSION_BUFFER);
+
+		return {};
+	}
+
+	return output;
+}
+
+vector<Token> HuffmanDecodeTokens(
+	const vector<uint8_t>& input,
+	const string& origin)
+{
+	vector<Token> tokens{};
+	if (input.empty()) return tokens;
+
+	const uint8_t* ptr = input.data();
+
+	//read frequency tables
+
+	size_t litFreq[256]{};
+	size_t lenFreq[256]{};
+	map<uint32_t, size_t> offFreq{};
+
+	ReadTable(ptr, litFreq, 256);
+	ReadTable(ptr, lenFreq, 256);
+	ReadTable32(ptr, offFreq);
+
+	//rebuild Huffman trees
+
+	auto litRoot = BuildTree(litFreq, 256);
+	auto lenRoot = BuildTree(lenFreq, 256);
+	auto offRoot = BuildTree32(offFreq);
+
+	BitReader br(ptr, input.size());
+
+	while (!br.EndOfStream())
+	{
+		int flag = br.ReadBit();
+		if (flag == 1) //literal
+		{
+			HuffNode* node = litRoot.get();
+
+			while (!node->IsLeaf())
+			{
+				int bit = br.ReadBit();
+				node = (bit == 0) ? node->left.get() : node->right.get();
+
+				if (br.EndOfStream())
+				{
+					KalaDataCore::ForceCloseByType(
+						"Unexpected end of stream while decompressing literal in '" + origin + "'!\n",
+						ForceCloseType::TYPE_DECOMPRESSION_BUFFER);
+
+					return {};
+				}
+			}
+
+			tokens.push_back(
+			{
+				true,
+				node->symbol, //decoded literal directly
+				0,
+				0
+			});
+		}
+		else //match
+		{
+			uint32_t offset = 0;
+			{
+				HuffNode32* node = offRoot.get();
+
+				while (!node->IsLeaf())
+				{
+					int bit = br.ReadBit();
+					node = (bit == 0) ? node->left.get() : node->right.get();
+				}
+				offset = node->symbol;
+			}
+
+			uint8_t length = 0;
+			{
+				HuffNode* node = lenRoot.get();
+
+				while (!node->IsLeaf())
+				{
+					int bit = br.ReadBit();
+					node = (bit == 0) ? node->left.get() : node->right.get();
+				}
+				length = node->symbol;
+			}
+
+			tokens.push_back(
+			{
+				false,
+				0,
+				offset,
+				length
+			});
+		}
+	}
+
+	return tokens;
+}
+
+unique_ptr<HuffNode> BuildTree(
+	const size_t freq[],
+	size_t count)
+{
+	priority_queue<unique_ptr<HuffNode>, vector<unique_ptr<HuffNode>>, NodeCompare> pq{};
+
+	for (size_t i = 0; i < count; i++)
+	{
+		if (freq[i] > 0) pq.push(make_unique<HuffNode>((uint8_t)i, freq[i]));
+	}
+
+	if (pq.empty()) return nullptr;
+
+	if (pq.size() == 1)
+	{
+		//ensure atleast two nodes
+		pq.push(make_unique<HuffNode>(0, 1));
+	}
+
+	while (pq.size() > 1)
+	{
+		unique_ptr<HuffNode> left = move(const_cast<unique_ptr<HuffNode>&>(pq.top())); pq.pop();
+		unique_ptr<HuffNode> right = move(const_cast<unique_ptr<HuffNode>&>(pq.top())); pq.pop();
+		auto merged = make_unique<HuffNode>(move(left), move(right));
+		pq.push(move(merged));
+	}
+
+	return move(const_cast<unique_ptr<HuffNode>&>(pq.top()));
+}
+
+unique_ptr<HuffNode32> BuildTree32(
+	const map<uint32_t, size_t>& freqMap)
+{
+	priority_queue<unique_ptr<HuffNode32>, vector<unique_ptr<HuffNode32>>, NodeCompare32> pq{};
+
+	for (auto& [sym, f] : freqMap)
+	{
+		if (f > 0) pq.push(make_unique<HuffNode32>(sym, f));
+	}
+
+	if (pq.empty()) return nullptr;
+
+	if (pq.size() == 1)
+	{
+		//ensure atleast two nodes
+		pq.push(make_unique<HuffNode32>(0, 1));
+	}
+
+	while (pq.size() > 1)
+	{
+		unique_ptr<HuffNode32> left = move(const_cast<unique_ptr<HuffNode32>&>(pq.top())); pq.pop();
+		unique_ptr<HuffNode32> right = move(const_cast<unique_ptr<HuffNode32>&>(pq.top())); pq.pop();
+		auto merged = make_unique<HuffNode32>(move(left), move(right));
+		pq.push(move(merged));
+	}
+
+	return move(const_cast<unique_ptr<HuffNode32>&>(pq.top()));
+}
+
+void ReadTable(
+	const uint8_t*& ptr,
+	size_t freq[],
+	size_t count)
+{
+	//clear output freq
+	fill(freq, freq + count, 0);
+
+	//read node
+
+	uint8_t node = *ptr++;
+	if (node == 1)
+	{
+		//sparse
+
+		uint16_t nonZero = 0;
+		memcpy(&nonZero, ptr, sizeof(uint16_t));
+		ptr += sizeof(uint16_t);
+
+		for (uint16_t i = 0; i < nonZero; i++)
+		{
+			uint8_t symbol = *ptr++;
+			uint32_t f = 0;
+			memcpy(&f, ptr, sizeof(uint32_t));
+			ptr += sizeof(uint32_t);
+
 			freq[symbol] = f;
 		}
 	}
 	else
 	{
-		//dense table
-		for (int i = 0; i < 256; i++)
+		//dense
+		for (size_t i = 0; i < count; i++)
 		{
-			uint32_t f{};
-			if (!in.read((char*)&f, sizeof(uint32_t)))
-			{
-				KalaDataCore::ForceCloseByType(
-					"Unexpected EOF while reading Huffman dense table entry in '" + origin + "'!\n",
-					ForceCloseType::TYPE_HUFFMAN_DECODE);
-
-				return {};
-			}
+			uint32_t f = 0;
+			memcpy(&f, ptr, sizeof(uint32_t));
+			ptr += sizeof(uint32_t);
 			freq[i] = f;
 		}
 	}
+}
 
-	//rebuild tree
-	priority_queue<unique_ptr<HuffNode>, vector<unique_ptr<HuffNode>>, NodeCompare> pq{};
-	size_t totalSymbols{};
-	for (int i = 0; i < 256; i++)
+void ReadTable32(
+	const uint8_t*& ptr,
+	map<uint32_t, size_t>& offFreq)
+{
+	offFreq.clear();
+
+	//read count
+	uint32_t nonZero = 0;
+	memcpy(&nonZero, ptr, sizeof(uint32_t));
+	ptr += sizeof(uint32_t);
+
+	for (uint32_t i = 0; i < nonZero; i++)
 	{
-		if (freq[i] > 0)
-		{
-			pq.push(make_unique<HuffNode>((uint8_t)i, freq[i]));
-			totalSymbols += freq[i];
-		}
+		uint32_t symbol = 0;
+		uint32_t freq = 0;
+
+		memcpy(&symbol, ptr, sizeof(uint32_t));
+		ptr += sizeof(uint32_t);
+
+		memcpy(&freq, ptr, sizeof(uint32_t));
+		ptr += sizeof(uint32_t);
+
+		offFreq[symbol] = freq;
 	}
-	if (pq.empty())
-	{
-		KalaDataCore::ForceCloseByType(
-			"Found empty frequency table in '" + origin + "'!\n",
-			ForceCloseType::TYPE_HUFFMAN_DECODE);
-
-		return {};
-	}
-	if (pq.size() == 1) pq.push(make_unique<HuffNode>(0, 1));
-
-	while (pq.size() > 1)
-	{
-		auto ExtractTop = [&](auto& q)
-			{
-				unique_ptr<HuffNode> node = move(const_cast<unique_ptr<HuffNode>&>(q.top()));
-				q.pop();
-				return node;
-			};
-
-		auto left = ExtractTop(pq);
-		auto right = ExtractTop(pq);
-
-		auto merged = make_unique<HuffNode>(move(left), move(right));
-		pq.push(move(merged));
-	}
-	unique_ptr<HuffNode> root = move(const_cast<unique_ptr<HuffNode>&>(pq.top()));
-	pq.pop();
-
-	//read remaining bitstream
-	size_t headerBytes = 0;
-	if (mode == 1)
-	{
-		//sparse
-		headerBytes = sizeof(uint8_t) + sizeof(uint16_t) + nonZero * (sizeof(uint8_t) + sizeof(uint32_t));
-	}
-	else
-	{
-		//dense
-		headerBytes = sizeof(uint8_t) + 256 * sizeof(uint32_t);
-	}
-
-	size_t remaining = storedSize - headerBytes;
-
-	vector<uint8_t> bitstream(remaining);
-	if (!in.read((char*)bitstream.data(), remaining))
-	{
-		KalaDataCore::ForceCloseByType(
-			"Unexpected EOF while reading Huffman bitstream in '" + origin + "'!\n",
-			ForceCloseType::TYPE_HUFFMAN_DECODE);
-
-		return {};
-	}
-
-	//decode
-	HuffNode* node = root.get();
-	for (size_t i = 0; i < bitstream.size(); i++)
-	{
-		uint8_t byte = bitstream[i];
-		for (int b = 7; b >= 0; b--)
-		{
-			int bit = (byte >> b) & 1;
-			node = (bit == 0) ? node->left.get() : node->right.get();
-
-			if (!node->left
-				&& !node->right)
-			{
-				out.push_back(node->symbol);
-				node = root.get();
-
-				if (out.size() == totalSymbols) return out;
-			}
-		}
-	}
-
-	if (out.size() != totalSymbols)
-	{
-		KalaDataCore::ForceCloseByType(
-			"Output size mismatch in '" + origin + "'!\n",
-			ForceCloseType::TYPE_HUFFMAN_DECODE);
-
-		return {};
-	}
-
-	return out;
 }

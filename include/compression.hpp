@@ -51,6 +51,7 @@ namespace KalaData::Compression
 			right(move(r)) {
 		}
 
+		bool IsLeaf() const { return !left && !right; }
 	};
 
 	//Huffman tree node (4 bytes)
@@ -79,6 +80,7 @@ namespace KalaData::Compression
 			right(move(r)) {
 		}
 
+		bool IsLeaf() const { return !left && !right; }
 	};
 
 	struct NodeCompare
@@ -159,31 +161,6 @@ namespace KalaData::Compression
 			const string& origin,
 			const string& target);
 
-		//
-		// SAME HELPERS IN COMPRESSION AND DECOMPRESSION,
-		// NOT NEEDED FOR GENERAL USE
-		//
-
-		//Recursively assign codes (1 byte)
-		static void BuildCodes(
-			HuffNode* node,
-			const string& prefix,
-			map<uint8_t, string>& codes);
-
-		//Recursively assign codes (4 bytes)
-		static void BuildCodes32(
-			HuffNode32* node,
-			const string& prefix,
-			map<uint32_t, string>& codes);
-
-		//Build Huffman codes from a fixed-size frequency table (literals or lengths)
-		static map<uint8_t, string> BuildHuffman(
-			const size_t freq[],
-			size_t count);
-
-		//Build Huffman codes from a sparse frequency table (offsets)
-		static map<uint32_t, string> BuildHuffmanMap(
-			const map<uint32_t, size_t>& freqMap);
 	private:
 		//Sliding window
 		static inline size_t WINDOW_SIZE = WINDOW_SIZE_FASTEST;
