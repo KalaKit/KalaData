@@ -470,6 +470,10 @@ namespace KalaData::Core
 			ss << "Toggles compression verbose messages on and off.\n"
 				<< "If true, then the following info is also displayed:\n\n"
 
+				<< "general:\n"
+				<< "  - resolved paths for go, create, delete, compress and decompress commands"
+				<< "  - archive version, window size, lookahead and min match when starting compression/decompression"
+
 				<< "individual file logs:\n"
 				<< "  - compressed/decompressed file is empty\n"
 				<< "  - original file size is bigger than the "
@@ -1021,6 +1025,12 @@ string ResolvePath(
 		resolved = path(origin).is_absolute()
 			? path(origin)
 			: path(currentPath) / origin;
+	}
+
+	if (KalaDataCore::IsVerboseLoggingEnabled())
+	{
+		KalaDataCore::PrintMessage(
+			"Resolved to path '" + resolved.string() + "'!\n");
 	}
 
 	return weakly_canonical(resolved).string();

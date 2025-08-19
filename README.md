@@ -97,10 +97,14 @@ Use the `--tvb` command to toggle verbose messages on and off.
 
 If enabled, then the following info is also displayed:
 
+general:
+  - resolved paths for go, create, delete, compress and decompress commands
+  - archive version, window size, lookahead and min match when starting compression/decompression
+
 individual file logs:
-  - compressed/decompressed file is empty
-  - original file size is bigger than the compressed file size so it will not be compressed/decompressed
-  - stored file size is smaller or equal than the compressed file size so it will be compressed/decompressed
+  - if compressed/decompressed file is empty
+  - if compressed/decompressed file is raw (original <= compressed)
+  - if compressed/decompressed file is compressed (original > compressed)
 
 compression/decompression success log additional rows:
   - compression/expansion ratio
