@@ -308,7 +308,7 @@ namespace KalaData::Core
 			<< "Notes:\n"
 			<< "  - KalaData accepts relative paths to current directory (or directory set with --go) or absolute paths.\n"
 			<< "  - the command '-help command' expects a valid command, like '--help c'.\n"
-			<< "  - the commands '--go' and '--delete' expect a valid file or directory path in your device\n"
+			<< "  - the commands '--go' and '--delete' expect a valid directory path in your device\n"
 			<< "  - the command '--create' expects a directory that does not exist\n"
 			<< "  - the command '--sm mode' expects a valid mode, like '--sm balanced'\n\n"
 
@@ -467,19 +467,17 @@ namespace KalaData::Core
 		{
 			ostringstream ss{};
 
-			ss << "Toggles compression verbose messages on and off.\n"
+			ss << "Toggles verbose messages on and off.\n"
 				<< "If true, then the following info is also displayed:\n\n"
 
 				<< "general:\n"
-				<< "  - resolved paths for go, create, delete, compress and decompress commands"
-				<< "  - archive version, window size, lookahead and min match when starting compression/decompression"
+				<< "  - resolved paths for go, create, delete, compress and decompress commands\n"
+				<< "  - archive version, window size, lookahead and min match when starting compression/decompression\n"
 
 				<< "individual file logs:\n"
-				<< "  - compressed/decompressed file is empty\n"
-				<< "  - original file size is bigger than the "
-				<< "compressed file size so it will not be compressed/decompressed\n"
-				<< "  - stored file size is smaller or equal than the "
-				<< "compressed file size so it will be compressed/decompressed\n\n"
+				<< "  - if compressed/decompressed file is empty\n"
+				<< "  - if compressed/decompressed file is raw (original <= compressed)\n"
+				<< "  - if compressed/decompressed file is compressed (original > compressed)\n\n"
 				
 				<< "compression/decompression success log additional rows:\n"
 				<< "  - compression/expansion ratio\n"
@@ -581,8 +579,8 @@ namespace KalaData::Core
 
 		currentPath = canonicalTarget;
 
-		KalaDataCore::PrintMessage("Moved to directory '" + canonicalTarget + "'\n",
-			MessageType::MESSAGETYPE_SUCCESS);
+		KalaDataCore::PrintMessage(
+			"Moved to directory '" + canonicalTarget + "'\n");
 	}
 
 	void Command::Command_Root()
@@ -600,8 +598,7 @@ namespace KalaData::Core
 		currentPath = rootDir;
 
 		KalaDataCore::PrintMessage(
-			"Navigated to system root directory '" + currentPath + "'\n",
-			MessageType::MESSAGETYPE_SUCCESS);
+			"Navigated to system root directory '" + currentPath + "'\n");
 	}
 
 	void Command::Command_Home()
@@ -617,8 +614,7 @@ namespace KalaData::Core
 		currentPath = current_path().string();
 
 		KalaDataCore::PrintMessage(
-			"Navigated to KalaData root '" + currentPath + "'\n",
-			MessageType::MESSAGETYPE_SUCCESS);
+			"Navigated to KalaData root '" + currentPath + "'\n");
 	}
 
 	void Command::Command_Where()
@@ -775,9 +771,7 @@ namespace KalaData::Core
 			<< "  Window size is '" << Archive::GetWindowSize() << " bytes'\n"
 			<< "  Lookahead is '" << Archive::GetLookAhead() << "'\n";
 
-		KalaDataCore::PrintMessage(
-			ss.str(),
-			MessageType::MESSAGETYPE_SUCCESS);
+		KalaDataCore::PrintMessage(ss.str());
 	}
 
 	void Command::Command_ToggleCompressionVerbosity()
