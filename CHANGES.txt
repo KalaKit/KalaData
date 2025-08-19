@@ -9,11 +9,30 @@ general improvements:
 	- archive header and per-file metadata layout revision for better memory/byte alignment
 	- can compress/decompress single file
 	- AES-GCM encryption/decryption
+	
+multithreading:
 
+	- file size <= 16MB - one thread allocated for this file
+		- main thread is reserved for small files
+	
+	- file size > 16MB - split into chunks and allocate one thread per chunk (4MB - 16MB)
+		- dynamic chunk size = file size / (numThreads * 2).
+		- numThreads = cpu cores (x2 if hyperthreaded)
+		
+	- dynamically switch sort on/off based when file size > 50MB or file count > 1000
+		- store priority index during compression into each file metadata so decompression can use it
+		- store file relative path and size in vector of structs, sort descending by size
+		- start with largest file and allocate all idle threads to it
+		- the remaining idle threads are allocated to the largest active file new chunk only if it needs one
+		
+	- thread limits based on available threads
+		- <= 4 threads - one thread per file
+		- > 4 and <= 8 threads - max four threads per file
+		- > 8 threads - max 8 threads per file
+		
 speed improvements:
 	
 	- faster match finder (hash-chain or binary-tree match finder)
-	- per-file multithreading
 	- chunk-based parallelism (split single large files into chunks and compress in parallel, one thread per chunk)
 	- rolling hash in match finder (skip non-matching regions faster than byte-by-byte compare)  
 	- SIMD/vectorized copies and match scans (use SSE/AVX/NEON to accelerate memory-heavy operations)  

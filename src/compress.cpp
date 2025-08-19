@@ -10,9 +10,7 @@
 #include <string>
 #include <chrono>
 #include <iomanip>
-#include <queue>
 #include <map>
-#include <memory>
 
 #include "core.hpp"
 #include "command.hpp"
@@ -49,12 +47,6 @@ using std::chrono::seconds;
 using std::fixed;
 using std::setprecision;
 using std::map;
-using std::priority_queue;
-using std::unique_ptr;
-using std::move;
-using std::make_unique;
-using std::memcmp;
-using std::exception;
 
 //Generate tokens list from raw data
 static vector<Token> CompressToTokens(
@@ -65,27 +57,6 @@ static vector<Token> CompressToTokens(
 static vector<uint8_t> HuffmanEncodeTokens(
 	const vector<Token>& tokens,
 	const string& origin);
-
-//Recursively assign codes (1 byte)
-static void BuildCodes(
-	HuffNode* node,
-	const string& prefix,
-	map<uint8_t, string>& codes);
-
-//Recursively assign codes (4 bytes)
-static void BuildCodes32(
-	HuffNode32* node,
-	const string& prefix,
-	map<uint32_t, string>& codes);
-
-//Build codes from a fixed-size frequency table (literals or lengths)
-static map<uint8_t, string> BuildHuffman(
-	const size_t freq[],
-	size_t count);
-
-//Build codes from a sparse frequency table (offsets)
-static map<uint32_t, string> BuildHuffmanMap(
-	const map<uint32_t, size_t>& freqMap);
 
 //Serializes a frequency table (literals or lengths) into the output stream (1 byte)
 static void WriteTable(
@@ -138,9 +109,7 @@ struct BitWriter
 		out.insert(out.end(), data.begin(), data.end());
 		data.clear();
 	}
-}; 
-
-static vector<Token> tokens{};
+};
 
 namespace KalaData::Compression
 {
@@ -484,9 +453,9 @@ vector<uint8_t> HuffmanEncodeTokens(
 	}
 
 	//build Huffman codes separately
-	auto litCodes = BuildHuffman(litFreq, 256);
-	auto lenCodes = BuildHuffman(lenFreq, 256);
-	auto offCodes = BuildHuffmanMap(offFreq);
+	auto litCodes = Archive::BuildHuffman(litFreq, 256);
+	auto lenCodes = Archive::BuildHuffman(lenFreq, 256);
+	auto offCodes = Archive::BuildHuffmanMap(offFreq);
 
 	//flags can just be bitpacked, so no Huffman needed
 
@@ -515,110 +484,6 @@ vector<uint8_t> HuffmanEncodeTokens(
 	bw.Flush(output);
 
 	return output;
-}
-
-void BuildCodes(
-	HuffNode* node,
-	const string& prefix,
-	map<uint8_t, string>& codes)
-{
-	if (!node->left
-		&& !node->right)
-	{
-		codes[node->symbol] = prefix.empty() ? "0" : prefix;
-	}
-
-	if (node->left) BuildCodes(node->left.get(), prefix + "0", codes);
-	if (node->right) BuildCodes(node->right.get(), prefix + "1", codes);
-}
-
-void BuildCodes32(
-	HuffNode32* node,
-	const string& prefix,
-	map<uint32_t, string>& codes)
-{
-	if (!node->left
-		&& !node->right)
-	{
-		codes[node->symbol] = prefix.empty() ? "0" : prefix;
-	}
-
-	if (node->left) BuildCodes32(node->left.get(), prefix + "0", codes);
-	if (node->right) BuildCodes32(node->right.get(), prefix + "1", codes);
-}
-
-map<uint8_t, string> BuildHuffman(
-	const size_t freq[],
-	size_t count)
-{
-	//priority queue
-	priority_queue<unique_ptr<HuffNode>, vector<unique_ptr<HuffNode>>, NodeCompare> pq{};
-
-	for (size_t i = 0; i < count; i++)
-	{
-		if (freq[i] > 0)
-		{
-			pq.push(make_unique<HuffNode>((uint8_t)i, freq[i]));
-		}
-	}
-
-	if (pq.empty()) return {}; //no symbols
-
-	if (pq.size() == 1)
-	{
-		//ensure 2 nodes minimum
-		pq.push(make_unique<HuffNode>(0, 1));
-	}
-
-	//build tree
-	while (pq.size() > 1)
-	{
-		unique_ptr<HuffNode> left = move(const_cast<unique_ptr<HuffNode>&>(pq.top())); pq.pop();
-		unique_ptr<HuffNode> right = move(const_cast<unique_ptr<HuffNode>&>(pq.top())); pq.pop();
-		auto merged = make_unique<HuffNode>(move(left), move(right));
-		pq.push(move(merged));
-	}
-	unique_ptr<HuffNode> root = move(const_cast<unique_ptr<HuffNode>&>(pq.top()));
-
-	//build codes reqursively
-	map<uint8_t, string> codes{};
-	BuildCodes(root.get(), "", codes);
-	return codes;
-}
-
-map<uint32_t, string> BuildHuffmanMap(
-	const map<uint32_t, size_t>& freqMap)
-{
-	//priority queue
-	priority_queue<unique_ptr<HuffNode32>, vector<unique_ptr<HuffNode32>>, NodeCompare32> pq{};
-
-	for (auto& [sym, f] : freqMap)
-	{
-		pq.push(make_unique<HuffNode32>(sym, f));
-	}
-
-	if (pq.empty()) return{}; //no symbols
-
-	if (pq.size() == 1)
-	{
-		//ensure 2 nodes minimum
-		pq.push(make_unique<HuffNode32>(0, 1));
-	}
-
-	//build tree
-	while (pq.size() > 1)
-	{
-		unique_ptr<HuffNode32> left = move(const_cast<unique_ptr<HuffNode32>&>(pq.top())); pq.pop();
-		unique_ptr<HuffNode32> right = move(const_cast<unique_ptr<HuffNode32>&>(pq.top())); pq.pop();
-		auto merged = make_unique<HuffNode32>(move(left), move(right));
-		pq.push(move(merged));
-	}
-	unique_ptr<HuffNode32> root = move(const_cast<unique_ptr<HuffNode32>&>(pq.top()));
-
-	//build codes reqursively
-	map<uint32_t, string> codes{};
-	BuildCodes32(root.get(), "", codes);
-	return codes;
 }
 
 void WriteTable(
