@@ -4,6 +4,8 @@
 - added compression and decompression with LZSS and Huffman algorithm
 
 0.2:
+- can compress/decompress single file
+- AES-GCM encryption/decryption
 - faster match finder (hash-chain or binary-tree match finder)
 - per-file multithreading
 - chunk-based parallelism (split single large files into chunks and compress in parallel, one thread per chunk)

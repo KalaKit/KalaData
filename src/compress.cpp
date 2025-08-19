@@ -422,18 +422,11 @@ namespace KalaData
 			return;
 		}
 
-		//check version validity
-
-		char version_major = KALADATA_VERSION[9];
-		char version_minor = KALADATA_VERSION[11];
-
-		string thisVersion{ magicVer[4], magicVer[5] };
-		string requiredVersion{ version_major, version_minor };
-
-		if (thisVersion != requiredVersion)
+		//skip original incompatible version
+		if (version == 1)
 		{
 			ForceClose(
-				"Unsupported version '" + thisVersion + "' in archive '" + origin + "'! Version must be '" + requiredVersion + "'\n",
+				"Outdated version '0.1' in archive '" + origin + "' is no longer supported! Use KalaData 0.2 or newer to decompress this '.kdat' archive.\n",
 				ForceCloseType::TYPE_DECOMPRESSION);
 
 			return;
