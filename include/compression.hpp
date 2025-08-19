@@ -21,7 +21,7 @@ namespace KalaData::Compression
 		uint8_t length;
 	};
 
-	//Huffman tree node
+	//Huffman tree node (1 byte)
 	struct HuffNode
 	{
 		uint8_t symbol;
@@ -49,11 +49,49 @@ namespace KalaData::Compression
 
 	};
 
+	//Huffman tree node (4 bytes)
+	struct HuffNode32
+	{
+		uint32_t symbol;
+		size_t freq;
+		unique_ptr<HuffNode32> left;
+		unique_ptr<HuffNode32> right;
+
+		HuffNode32(
+			uint32_t s,
+			size_t f) :
+			symbol(s),
+			freq(f),
+			left(nullptr),
+			right(nullptr) {
+		}
+
+		HuffNode32(
+			unique_ptr<HuffNode32> l,
+			unique_ptr<HuffNode32> r) :
+			symbol(0),
+			freq(l->freq + r->freq),
+			left(move(l)),
+			right(move(r)) {
+		}
+
+	};
+
 	struct NodeCompare
 	{
 		bool operator()(
 			const unique_ptr<HuffNode>& a,
 			const unique_ptr<HuffNode>& b) const
+		{
+			return a->freq > b->freq;
+		}
+	};
+
+	struct NodeCompare32
+	{
+		bool operator()(
+			const unique_ptr<HuffNode32>& a,
+			const unique_ptr<HuffNode32>& b) const
 		{
 			return a->freq > b->freq;
 		}

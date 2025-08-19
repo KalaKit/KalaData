@@ -153,9 +153,8 @@ compression/decompression success log additional rows:
 | +0x00  | 8 B   | originalSize | Size before compression                  |
 | +0x08  | 8 B   | storedSize   | Size of raw/compressed file              |
 | +0x10  | 1 B   | method       | 0 = raw, 1 = Compressed, 2 += reserved   |
-| +0x11  | 3 B   | padding      | For 4-byte alignment                     |
-| +0x14  | 4 B   | pathLen      | Length of relative path string           |
-| +0x18  | N B   | relPath      | UTF-8 relative path (no null terminator) |
+| +0x11  | 4 B   | pathLen      | Length of relative path string           |
+| +0x15  | N B   | relPath      | UTF-8 relative path (no null terminator) |
 | ...    | M B   | data         | File data (raw/compressed), ciphertext if AES enabled, omitted if storedSize = 0 |
 
 ## Notes
