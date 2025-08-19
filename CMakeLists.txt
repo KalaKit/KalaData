@@ -1,7 +1,7 @@
 ﻿cmake_minimum_required(VERSION 3.29.2)
 
-set(KALADATA_VERSION "KalaData 0.1 Alpha")
-set(KALADATA_VERSION_NUMBER 0.1.0.0)
+set(KALADATA_VERSION "KalaData 0.2 Alpha")
+set(KALADATA_VERSION_NUMBER 0.2.0.0)
 
 project("KalaData" VERSION ${KALADATA_VERSION_NUMBER} LANGUAGES C CXX)
 
