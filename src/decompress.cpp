@@ -68,23 +68,14 @@ static vector<Token> HuffmanDecodeTokens(
 	const vector<uint8_t>& input,
 	const string& origin);
 
-//Build tree root for traversal for literals or lengths (1 byte)
-static unique_ptr<HuffNode> BuildTree(
-	const size_t freq[],
-	size_t count);
-
-//Build tree root for traversal for offsets (4 bytes)
-static unique_ptr<HuffNode32> BuildTree32(
-	const map<uint32_t, size_t>& freqMap);
-
-//Derializes a frequency table (literals or lengths) from the input stream (1 byte)
-static void ReadTable(
+//Derialize a code-length table (literals or lengths) from the input stream (1 byte)
+static void ReadCodeLengths(
 	const uint8_t*& ptr,
 	size_t freq[],
 	size_t count);
 
-//Deserializes a frequency table (offsets) from the input stream (4 bytes)
-static void ReadTable32(
+//Deserialize a frequency table (offsets) from the input stream (4 bytes)
+static void ReadCodeLengths32(
 	const uint8_t*& ptr,
 	map<uint32_t, size_t>& offFreq);
 
@@ -119,23 +110,19 @@ struct BitReader
 		return bit;
 	}
 
-	//Read a sequence of bits into a string for Huffman decoding
-	string ReadCode(const map<string, uint8_t>& table)
+	//Read multiple bits into an integer (canonical Huffman)
+	uint32_t ReadBits(int n)
 	{
-		string code{};
-
-		while (true)
+		uint32_t value = 0;
+		for (int i = 0; i < n; i++)
 		{
 			int b = ReadBit();
 			if (b == -1) break; //EOF
-
-			code.push_back(b ? '1' : '0');
-
-			auto it = table.find(code);
-			if (it != table.end()) return code; //found a complete code
+			value = (value << 1) | b;
 		}
-		return ""; //not found or EOF
+		return value;
 	}
+	
 
 	bool EndOfStream() const
 	{
@@ -654,65 +641,6 @@ vector<Token> HuffmanDecodeTokens(
 	}
 
 	return tokens;
-}
-
-unique_ptr<HuffNode> BuildTree(
-	const size_t freq[],
-	size_t count)
-{
-	priority_queue<unique_ptr<HuffNode>, vector<unique_ptr<HuffNode>>, NodeCompare> pq{};
-
-	for (size_t i = 0; i < count; i++)
-	{
-		if (freq[i] > 0) pq.push(make_unique<HuffNode>((uint8_t)i, freq[i]));
-	}
-
-	if (pq.empty()) return nullptr;
-
-	if (pq.size() == 1)
-	{
-		//ensure atleast two nodes
-		pq.push(make_unique<HuffNode>(0, 1));
-	}
-
-	while (pq.size() > 1)
-	{
-		unique_ptr<HuffNode> left = move(const_cast<unique_ptr<HuffNode>&>(pq.top())); pq.pop();
-		unique_ptr<HuffNode> right = move(const_cast<unique_ptr<HuffNode>&>(pq.top())); pq.pop();
-		auto merged = make_unique<HuffNode>(move(left), move(right));
-		pq.push(move(merged));
-	}
-
-	return move(const_cast<unique_ptr<HuffNode>&>(pq.top()));
-}
-
-unique_ptr<HuffNode32> BuildTree32(
-	const map<uint32_t, size_t>& freqMap)
-{
-	priority_queue<unique_ptr<HuffNode32>, vector<unique_ptr<HuffNode32>>, NodeCompare32> pq{};
-
-	for (auto& [sym, f] : freqMap)
-	{
-		if (f > 0) pq.push(make_unique<HuffNode32>(sym, f));
-	}
-
-	if (pq.empty()) return nullptr;
-
-	if (pq.size() == 1)
-	{
-		//ensure atleast two nodes
-		pq.push(make_unique<HuffNode32>(0, 1));
-	}
-
-	while (pq.size() > 1)
-	{
-		unique_ptr<HuffNode32> left = move(const_cast<unique_ptr<HuffNode32>&>(pq.top())); pq.pop();
-		unique_ptr<HuffNode32> right = move(const_cast<unique_ptr<HuffNode32>&>(pq.top())); pq.pop();
-		auto merged = make_unique<HuffNode32>(move(left), move(right));
-		pq.push(move(merged));
-	}
-
-	return move(const_cast<unique_ptr<HuffNode32>&>(pq.top()));
 }
 
 void ReadTable(
