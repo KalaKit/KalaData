@@ -619,6 +619,7 @@ namespace KalaData::Core
 
 	void Command::Command_Where()
 	{
+		//always set current path if unset
 		if (currentPath.empty()) currentPath = current_path().string();
 
 		KalaDataCore::PrintMessage("Currently located at '" + currentPath + "'\n");
@@ -982,21 +983,45 @@ string ResolvePath(
 	const string& origin,
 	bool checkExistence)
 {
-	if (checkExistence
-		&& !exists(origin))
-	{
-		KalaDataCore::PrintMessage(
-			"Path '" + origin + "' does not exist!\n",
-			MessageType::MESSAGETYPE_ERROR);
+	path resolved{};
 
-		return "";
-	}
-
+	//always set current path if unset
 	if (currentPath.empty()) currentPath = current_path().string();
 
-	path resolved = path(origin).is_absolute()
-		? path(origin)
-		: path(currentPath) / origin;
+	if (checkExistence)
+	{
+		//default full path
+		if (exists(origin)) resolved = path(origin);
+
+		//path relative to KalaData root
+		else if (exists(path(current_path()) / origin))
+		{
+			resolved = path(current_path()) / origin;
+		}
+
+		//path relative to virtual current path
+		else if (exists(path(currentPath) / origin))
+		{
+			resolved = path(currentPath) / origin;
+		}
+
+		//path is invalid
+		else
+		{
+			KalaDataCore::PrintMessage(
+				"Path '" + origin + "' does not exist!\n",
+				MessageType::MESSAGETYPE_ERROR);
+
+			return "";
+		}
+	}
+	else
+	{
+		//construct without validation
+		resolved = path(origin).is_absolute()
+			? path(origin)
+			: path(currentPath) / origin;
+	}
 
 	return weakly_canonical(resolved).string();
 }
