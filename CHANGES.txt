@@ -3,12 +3,25 @@
 - added command system
 - added compression and decompression with LZSS and Huffman algorithm
 
+0.2:
+- faster match finder (hash-chain or binary-tree match finder)
+- per-file multithreading
+- chunk-based parallelism (split single large files into chunks and compress in parallel, one thread per chunk)
+- rolling hash in match finder (skip non-matching regions faster than byte-by-byte compare)  
+- SIMD/vectorized copies and match scans (use SSE/AVX/NEON to accelerate memory-heavy operations)  
+- buffered I/O with large block sizes or memory-mapped files (reduce system call overhead during read/write)
+- store code lengths (canonical form) and build a fixed-width or 2-level table for O(1) byte decode
+
 ==========================================================
 UPCOMING CHANGES
 ==========================================================
 
-- per-file multithreading
-- faster match finder (hash-chain or binary-tree match finder)
-- peek one byte ahead: if taking a 1-byte literal now leads to a longer match next step, choose the literal
-- store code lengths (canonical form) and build a fixed-width or 2-level table for O(1) byte decode
-- pack 8 flags per token into one byte (bitmask) and then interleave the payloads
+Format efficiency:
+- pack 8 flags per token into one byte (bitmask) and interleave the payloads
+- skip Huffman for very small files (avoid overhead on tiny inputs)
+- precomputed “fixed” Huffman tables for common symbol distributions (e.g. ASCII text, zero-heavy data)
+- adaptive strategy: switch between raw/LZSS/Huffman depending on file type or size thresholds
+
+Compression ratio improvements:
+- peek one byte ahead (lazy matching heuristic to improve match selection)
+- improve parser beyond greedy/lazy (multi-step lookahead or optimal parsing for better ratio)
