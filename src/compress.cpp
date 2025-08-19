@@ -192,10 +192,10 @@ namespace KalaData
 		{
 			ostringstream ss{};
 
-			ss << "Window size is '" << WINDOW_SIZE << "'.\n"
+			ss << "Archive '" + target + "' version will be '" + string(magicVer, 6) + "'.\n\n"
+				<< "Window size is '" << WINDOW_SIZE << "'.\n"
 				<< "Lookahead is '" << LOOKAHEAD << "'.\n"
-				<< "Min match is '" << MIN_MATCH << "'.\n\n"
-				<< "Archive '" + target + "' version will be '" + string(magicVer, 6) + "'.\n";
+				<< "Min match is '" << MIN_MATCH << "'.\n";
 
 			Core::PrintMessage(ss.str());
 		}
@@ -451,10 +451,10 @@ namespace KalaData
 		{
 			ostringstream ss{};
 
-			ss << "Window size is '" << WINDOW_SIZE << "'.\n"
+			ss << "Archive '" + target + "' version is '" + string(magicVer, 6) + "'.\n\n"
+				<< "Window size is '" << WINDOW_SIZE << "'.\n"
 				<< "Lookahead is '" << LOOKAHEAD << "'.\n"
-				<< "Min match is '" << MIN_MATCH << "'.\n\n"
-				<< "Archive '" + target + "' version is '" + string(magicVer, 6) + "'.\n";
+				<< "Min match is '" << MIN_MATCH << "'.\n";
 
 			Core::PrintMessage(ss.str());
 		}
