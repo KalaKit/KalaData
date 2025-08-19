@@ -6,7 +6,7 @@
 
 ![Logo](logo.png)
 
-KalaData is a custom compression and decompression tool written in C++20, built entirely from scratch without external dependencies.  
+KalaData is a custom multithreaded compression and decompression tool written in C++20, built entirely from scratch without external dependencies.  
 It uses a hybrid LZSS + Huffman pipeline to compress data efficiently, while falling back to raw or empty storage when appropriate.  
 All data is stored in a dedicated archival format with the `.kdat` extension.
 
@@ -42,6 +42,28 @@ KalaData supports two modes of operation:
    Commands such as `--c`, `--dc`, or `--tvb` can then be entered directly.  
 
 Note: KalaData does not support command piping or chaining. Commands must be given either at startup in direct mode or entered manually in interactive mode within the CLI environment.
+
+---
+
+## Multithreading
+
+If file size <= 16MB - one thread allocated for this file
+	- main thread is reserved for small files
+	
+If file size > 16MB - split into chunks and allocate one thread per chunk (4MB - 16MB)
+	- dynamic chunk size = file size / (numThreads * 2).
+	- numThreads = cpu cores (x2 if hyperthreaded)
+		
+Sort files by size so larger files are compressed/decompressed first
+	- store priority index during compression into each file metadata so decompression can use it without sorting again
+	- store file relative path and size in vector of structs, sort descending by size
+	- start with largest file and allocate all idle threads to it
+	- the remaining idle threads are allocated to the largest active file new chunk only if it needs one
+		
+Thread limits based on available threads
+	- <= 4 threads - one thread per file
+	- > 4 and <= 8 threads - max four threads per file
+	- > 8 threads - max 8 threads per file
 
 ---
 
@@ -119,7 +141,7 @@ compression/decompression success log additional rows:
 
 ## KalaData Archive Layout
 
-### Header data (aligned, 64 bytes enforced)
+### Header data (64 bytes enforced)
 
 | Offset      | Size | Field      | Description                            |
 |-------------|------|------------|----------------------------------------|
@@ -146,16 +168,17 @@ compression/decompression success log additional rows:
 | 3      | 0x0008  | isFolder | Archive source was a folder (1=folder, 0=single file) |
 | 4 - 15 | —       | Reserved | 14 bits free for expansion                            |
 
-### Per-file metadata (aligned)
+### Per-file metadata
 
-| Offset | Size  | Field        | Description                              |
-|--------|-------|--------------|------------------------------------------|
-| +0x00  | 8 B   | originalSize | Size before compression                  |
-| +0x08  | 8 B   | storedSize   | Size of raw/compressed file              |
-| +0x10  | 1 B   | method       | 0 = raw, 1 = Compressed, 2 += reserved   |
-| +0x11  | 4 B   | pathLen      | Length of relative path string           |
-| +0x15  | N B   | relPath      | UTF-8 relative path (no null terminator) |
-| ...    | M B   | data         | File data (raw/compressed), ciphertext if AES enabled, omitted if storedSize = 0 |
+| Offset | Size  | Field         | Description                              |
+|--------|-------|---------------|------------------------------------------|
+| +0x00  | 8 B   | originalSize  | Size before compression                  |
+| +0x08  | 8 B   | storedSize    | Size of raw/compressed file              |
+| +0x10  | 4 B   | priorityIndex | Sorting index (descending by size)       |
+| +0x14  | 1 B   | method        | 0 = raw, 1 = Compressed, 2 += reserved   |
+| +0x15  | 4 B   | pathLen       | Length of relative path string           |
+| +0x19  | N B   | relPath       | UTF-8 relative path (no null terminator) |
+| ...    | M B   | data          | File data (raw/compressed), ciphertext if AES enabled, omitted if storedSize = 0 |
 
 ## Notes
 - Archive always starts with `KDATxx` where `xx` is the version (01–99).
