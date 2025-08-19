@@ -205,10 +205,10 @@ compression/decompression success log additional rows:
 | Bit    | Mask    | Name     | Meaning                                               |
 |--------|---------|----------|-------------------------------------------------------|
 | 0      | 0x0001  | AES      | AES-GCM enabled (data is ciphertext)                  |
-| 1      | 0x0002  | Solid    | Solid archive (all files compressed as one block)     |
-| 2      | 0x0004  | RawOnly  | Disable compression (store entries raw)               |
+| 1      | 0x0002  | solid    | Solid archive (all files compressed as one block)     |
+| 2      | 0x0004  | rawOnly  | Disable compression (store entries raw)               |
 | 3      | 0x0008  | isFolder | Archive source was a folder (1=folder, 0=single file) |
-| 4 - 15 | —       | Reserved | 14 bits free for expansion                            |
+| 4 - 15 | —       | reserved | Reserved for future expansion                         |
 
 ### Per-file metadata
 
