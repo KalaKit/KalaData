@@ -19,8 +19,9 @@
 #include "command.hpp"
 #include "compression.hpp"
 
+using KalaHeaders::LogType;
+
 using KalaData::Core::KalaDataCore;
-using KalaData::Core::MessageType;
 using KalaData::Compression::Archive;
 
 using KalaData::Compression::WINDOW_SIZE_FASTEST;
@@ -275,28 +276,34 @@ namespace KalaData::Core
 
 		KalaDataCore::PrintMessage(
 			ss.str(),
-			MessageType::MESSAGETYPE_ERROR);
+			"COMMAND",
+			LogType::LOG_ERROR);
 	}
 
 	void Command::Command_Version()
 	{
-		KalaDataCore::PrintMessage(KALADATA_VERSION "\n");
+		KalaDataCore::PrintMessage(
+			KALADATA_VERSION "\n",
+			"COMMAND",
+			LogType::LOG_INFO);
 	}
 
 	void Command::Command_About()
 	{
 		ostringstream ss{};
 
-		ss << "KalaData is a custom compression and decompression tool written in C++20, "
-			<< "built entirely from scratch without external dependencies.\n"
-			<< "It uses a hybrid LZSS + Huffman pipeline to compress data efficiently, "
+		ss << "KalaData is a custom multithreaded compression and decompression library + CLI written in C++20.\n"
+			<< "It uses a hybrid LZSS + canonical Huffman pipeline to compress data efficiently, "
 			<< "while falling back to raw or empty storage when appropriate.\n"
 			<< "All data is stored in a dedicated archival format with the '.kdat' extension.\n\n"
 
 			<< "KalaData was created by and is maintained by KalaKit, an organization owned by Lost Empire Entertainment.\n"
 			<< "Official repository: 'https://github.com/KalaKit/KalaData'\n";
 
-		KalaDataCore::PrintMessage(ss.str());
+		KalaDataCore::PrintMessage(
+			ss.str(),
+			"COMMAND",
+			LogType::LOG_INFO);
 	}
 
 	void Command::Command_Help()
@@ -332,7 +339,10 @@ namespace KalaData::Core
 
 			<< "====================\n";
 
-		KalaDataCore::PrintMessage(ss.str());
+		KalaDataCore::PrintMessage(
+			ss.str(),
+			"COMMAND",
+			LogType::LOG_INFO);
 	}
 
 	void Command::Command_Help_Command(const string& commandName)
@@ -340,7 +350,10 @@ namespace KalaData::Core
 		if (commandName == "v"
 			|| commandName == "--v")
 		{
-			KalaDataCore::PrintMessage("Prints the KalaData version\n");
+			KalaDataCore::PrintMessage(
+				"Prints the KalaData version\n",
+				"COMMAND",
+				LogType::LOG_INFO);
 
 			return;
 		}
@@ -348,7 +361,10 @@ namespace KalaData::Core
 		else if (commandName == "about"
 			|| commandName == "--about")
 		{
-			KalaDataCore::PrintMessage("Prints the KalaData description\n");
+			KalaDataCore::PrintMessage(
+				"Prints the KalaData description\n",
+				"COMMAND",
+				LogType::LOG_INFO);
 		
 			return;
 		}
@@ -356,7 +372,10 @@ namespace KalaData::Core
 		else if (commandName == "help"
 			|| commandName == "--help")
 		{
-			KalaDataCore::PrintMessage("Lists all commands\n");
+			KalaDataCore::PrintMessage(
+				"Lists all commands\n",
+				"COMMAND",
+				LogType::LOG_INFO);
 		
 			return;
 		}
@@ -364,7 +383,10 @@ namespace KalaData::Core
 		else if (commandName == "go"
 			|| commandName == "--go")
 		{
-			KalaDataCore::PrintMessage("Go to a directory on your device to be able to compress/decompress relative to that directory\n");
+			KalaDataCore::PrintMessage(
+				"Go to a directory on your device to be able to compress/decompress relative to that directory\n",
+				"COMMAND",
+				LogType::LOG_INFO);
 		
 			return;
 		}
@@ -372,7 +394,10 @@ namespace KalaData::Core
 		else if (commandName == "root"
 			|| commandName == "--root")
 		{
-			KalaDataCore::PrintMessage("Navigate to system root directory\n");
+			KalaDataCore::PrintMessage(
+				"Navigate to system root directory\n",
+				"COMMAND",
+				LogType::LOG_INFO);
 
 			return;
 		}
@@ -380,7 +405,10 @@ namespace KalaData::Core
 		else if (commandName == "home"
 			|| commandName == "--home")
 		{
-			KalaDataCore::PrintMessage("Navigate to KalaData root directory\n");
+			KalaDataCore::PrintMessage(
+				"Navigate to KalaData root directory\n",
+				"COMMAND",
+				LogType::LOG_INFO);
 
 			return;
 		}
@@ -388,7 +416,10 @@ namespace KalaData::Core
 		else if (commandName == "where"
 			|| commandName == "--where")
 		{
-			KalaDataCore::PrintMessage("Prints your current path (program default or the one set with --go)\n");
+			KalaDataCore::PrintMessage(
+				"Prints your current path (program default or the one set with --go)\n",
+				"COMMAND",
+				LogType::LOG_INFO);
 		
 			return;
 		}
@@ -396,7 +427,10 @@ namespace KalaData::Core
 		else if (commandName == "list"
 			|| commandName == "--list")
 		{
-			KalaDataCore::PrintMessage("Lists all files and directories in your current path (program default or the one set with --go)\n");
+			KalaDataCore::PrintMessage(
+				"Lists all files and directories in your current path (program default or the one set with --go)\n",
+				"COMMAND",
+				LogType::LOG_INFO);
 		
 			return;
 		}
@@ -404,7 +438,10 @@ namespace KalaData::Core
 		else if (commandName == "create"
 			|| commandName == "--create")
 		{
-			KalaDataCore::PrintMessage("Creates a new directory in your chosen path\n");
+			KalaDataCore::PrintMessage(
+				"Creates a new directory in your chosen path\n",
+				"COMMAND",
+				LogType::LOG_INFO);
 
 			return;
 		}
@@ -417,7 +454,10 @@ namespace KalaData::Core
 			ss << "Deletes the file or directory at your chosen path, asks for permission first. "
 				<< "Warning: the file or directory is unrecoverable after deletion!\n";
 
-			KalaDataCore::PrintMessage(ss.str());
+			KalaDataCore::PrintMessage(
+				ss.str(),
+				"COMMAND",
+				LogType::LOG_INFO);
 
 			return;
 		}
@@ -457,7 +497,10 @@ namespace KalaData::Core
 				<< "  - window size: " << WINDOW_SIZE_ARCHIVE << " bytes\n"
 				<< "  - lookahead: " << LOOKAHEAD_ARCHIVE << "\n";
 
-			KalaDataCore::PrintMessage(ss.str());
+			KalaDataCore::PrintMessage(
+				ss.str(),
+				"COMMAND",
+				LogType::LOG_INFO);
 
 			return;
 		}
@@ -488,7 +531,10 @@ namespace KalaData::Core
 				<< "  - raw files\n"
 				<< "  - empty files\n";
 
-			KalaDataCore::PrintMessage(ss.str());
+			KalaDataCore::PrintMessage(
+				ss.str(),
+				"COMMAND",
+				LogType::LOG_INFO);
 
 			return;
 		}
@@ -512,7 +558,10 @@ namespace KalaData::Core
 				<< "  - path must have the '.kdat' extension\n"
 				<< "  - path parent directory must be writable\n";
 
-			KalaDataCore::PrintMessage(ss.str());
+			KalaDataCore::PrintMessage(
+				ss.str(),
+				"COMMAND",
+				LogType::LOG_INFO);
 
 			return;
 		}
@@ -535,7 +584,10 @@ namespace KalaData::Core
 				<< "  - path must be a directory\n"
 				<< "  - directory must be writable\n";
 
-			KalaDataCore::PrintMessage(ss.str());
+			KalaDataCore::PrintMessage(
+				ss.str(),
+				"COMMAND",
+				LogType::LOG_INFO);
 
 			return;
 		}
@@ -543,14 +595,18 @@ namespace KalaData::Core
 		else if (commandName == "exit"
 			|| commandName == "--exit")
 		{
-			KalaDataCore::PrintMessage("Shuts down KalaData\n");
+			KalaDataCore::PrintMessage(
+				"Shuts down KalaData\n",
+				"COMMAND",
+				LogType::LOG_INFO);
 
 			return;
 		}
 
 		KalaDataCore::PrintMessage(
 			"Cannot get info about command '" + commandName + "' because it does not exist! Type '--help' to list all commands\n",
-			MessageType::MESSAGETYPE_ERROR);
+			"COMMAND",
+			LogType::LOG_ERROR);
 	}
 
 	void Command::Command_Go(const string& target)
@@ -563,7 +619,8 @@ namespace KalaData::Core
 		{
 			KalaDataCore::PrintMessage(
 				"Already located at the same path '" + canonicalTarget + "'!\n",
-				MessageType::MESSAGETYPE_ERROR);
+				"COMMAND",
+				LogType::LOG_ERROR);
 
 			return;
 		}
@@ -572,7 +629,8 @@ namespace KalaData::Core
 		{
 			KalaDataCore::PrintMessage(
 				"Target path '" + canonicalTarget + "' is not a directory!\n",
-				MessageType::MESSAGETYPE_ERROR);
+				"COMMAND",
+				LogType::LOG_ERROR);
 
 			return;
 		}
@@ -580,7 +638,9 @@ namespace KalaData::Core
 		currentPath = canonicalTarget;
 
 		KalaDataCore::PrintMessage(
-			"Moved to directory '" + canonicalTarget + "'\n");
+			"Moved to directory '" + canonicalTarget + "'\n",
+			"COMMAND",
+			LogType::LOG_INFO);
 	}
 
 	void Command::Command_Root()
@@ -590,7 +650,8 @@ namespace KalaData::Core
 		if (currentPath == rootDir)
 		{
 			KalaDataCore::PrintMessage("Already located at system root '" + currentPath + "'!\n",
-				MessageType::MESSAGETYPE_ERROR);
+				"COMMAND",
+				LogType::LOG_ERROR);
 
 			return;
 		}
@@ -598,7 +659,9 @@ namespace KalaData::Core
 		currentPath = rootDir;
 
 		KalaDataCore::PrintMessage(
-			"Navigated to system root directory '" + currentPath + "'\n");
+			"Navigated to system root directory '" + currentPath + "'\n",
+			"COMMAND",
+			LogType::LOG_INFO);
 	}
 
 	void Command::Command_Home()
@@ -606,7 +669,8 @@ namespace KalaData::Core
 		if (currentPath == current_path().string())
 		{
 			KalaDataCore::PrintMessage("Already located at KalaData root '" + currentPath + "'!\n",
-				MessageType::MESSAGETYPE_ERROR);
+				"COMMAND",
+				LogType::LOG_ERROR);
 
 			return;
 		}
@@ -614,7 +678,9 @@ namespace KalaData::Core
 		currentPath = current_path().string();
 
 		KalaDataCore::PrintMessage(
-			"Navigated to KalaData root '" + currentPath + "'\n");
+			"Navigated to KalaData root '" + currentPath + "'\n",
+			"COMMAND",
+			LogType::LOG_INFO);
 	}
 
 	void Command::Command_Where()
@@ -622,14 +688,20 @@ namespace KalaData::Core
 		//always set current path if unset
 		if (currentPath.empty()) currentPath = current_path().string();
 
-		KalaDataCore::PrintMessage("Currently located at '" + currentPath + "'\n");
+		KalaDataCore::PrintMessage(
+			"Currently located at '" + currentPath + "'\n",
+			"COMMAND",
+			LogType::LOG_INFO);
 	}
 
 	void Command::Command_List()
 	{
 		if (currentPath.empty()) currentPath = current_path().string();
 
-		KalaDataCore::PrintMessage("Listing all files and directories in '" + currentPath + "'\n");
+		KalaDataCore::PrintMessage(
+			"Listing all files and directories in '" + currentPath + "'\n",
+			"COMMAND",
+			LogType::LOG_INFO);
 
 		for (const auto& thisPath : directory_iterator(currentPath))
 		{
@@ -639,7 +711,9 @@ namespace KalaData::Core
 
 			string fullName = "  " + path(thisPath).filename().string() + suffix;
 
-			KalaDataCore::PrintMessage(fullName);
+			KalaDataCore::PrintMessage(
+				fullName,
+				"");
 		}
 	}
 
@@ -661,8 +735,10 @@ namespace KalaData::Core
 		if (any_of(restrictedFileNames, 
 				[&](const string& name) { return Equals(thisStem, name); }))
 		{
-			KalaDataCore::PrintMessage("File name '" + target + "' is restricted on Windows!\n",
-				MessageType::MESSAGETYPE_ERROR);
+			KalaDataCore::PrintMessage(
+				"File name '" + target + "' is restricted on Windows!\n",
+				"COMMAND",
+				LogType::LOG_ERROR);
 
 			return;
 		}
@@ -671,8 +747,10 @@ namespace KalaData::Core
 
 		if (exists(canonicalTarget))
 		{
-			KalaDataCore::PrintMessage("Cannot create new directory '" + canonicalTarget + "' because it already exists!\n",
-				MessageType::MESSAGETYPE_ERROR);
+			KalaDataCore::PrintMessage(
+				"Cannot create new directory '" + canonicalTarget + "' because it already exists!\n",
+				"COMMAND",
+				LogType::LOG_ERROR);
 
 			return;
 		}
@@ -689,14 +767,16 @@ namespace KalaData::Core
 
 			KalaDataCore::PrintMessage(
 				ss.str(),
-				MessageType::MESSAGETYPE_ERROR);
+				"COMMAND",
+				LogType::LOG_ERROR);
 
 			return;
 		}
 
 		KalaDataCore::PrintMessage(
 			"Created new directory '" + path(canonicalTarget).stem().string() + "' at '" + canonicalTarget + "'\n",
-			MessageType::MESSAGETYPE_SUCCESS);
+			"COMMAND",
+			LogType::LOG_SUCCESS);
 	}
 
 	void Command::Command_Delete(const string& target)
@@ -715,14 +795,19 @@ namespace KalaData::Core
 
 			<< "Your answer: ";
 
-		KalaDataCore::PrintMessage(ss.str());
+		KalaDataCore::PrintMessage(
+			ss.str(),
+			"COMMAND",
+			LogType::LOG_INFO);
 
 		cin >> answer;
 
 		if (answer != "delete")
 		{
 			KalaDataCore::PrintMessage(
-				"Skipped the deletion of file or directory '" + canonicalTarget + "'\n");
+				"Skipped the deletion of file or directory '" + canonicalTarget + "'\n",
+				"COMMAND",
+				LogType::LOG_INFO);
 
 			return;
 		}
@@ -740,14 +825,16 @@ namespace KalaData::Core
 
 			KalaDataCore::PrintMessage(
 				ss.str(),
-				MessageType::MESSAGETYPE_ERROR);
+				"COMMAND",
+				LogType::LOG_ERROR);
 
 			return;
 		}
 
 		KalaDataCore::PrintMessage(
 			"Deleted file or directory '" + canonicalTarget + "'\n",
-			MessageType::MESSAGETYPE_SUCCESS);
+			"COMMAND",
+			LogType::LOG_SUCCESS);
 	}
 
 	void Command::Command_SetCompressionMode(const string& mode)
@@ -757,7 +844,8 @@ namespace KalaData::Core
 		{
 			KalaDataCore::PrintMessage(
 				"Compression mode '" + mode + "' does not exist!\n",
-				MessageType::MESSAGETYPE_ERROR);
+				"COMMAND",
+				LogType::LOG_ERROR);
 
 			return;
 		}
@@ -771,7 +859,10 @@ namespace KalaData::Core
 			<< "  Window size is '" << Archive::GetWindowSize() << " bytes'\n"
 			<< "  Lookahead is '" << Archive::GetLookAhead() << "'\n";
 
-		KalaDataCore::PrintMessage(ss.str());
+		KalaDataCore::PrintMessage(
+			ss.str(),
+			"COMMAND",
+			LogType::LOG_INFO);
 	}
 
 	void Command::Command_ToggleCompressionVerbosity()
@@ -784,7 +875,9 @@ namespace KalaData::Core
 		string stateStr = state ? "true" : "false";
 
 		KalaDataCore::PrintMessage(
-			"Set compression verbose logging state to '" + stateStr + "'!\n");
+			"Set compression verbose logging state to '" + stateStr + "'!\n",
+			"COMMAND",
+			LogType::LOG_INFO);
 	}
 
 	void Command::Command_Compress(
@@ -796,7 +889,8 @@ namespace KalaData::Core
 		{
 			KalaDataCore::PrintMessage(
 				"Path '" + origin + "' is not allowed as origin path!\n",
-				MessageType::MESSAGETYPE_ERROR);
+				"COMMAND",
+				LogType::LOG_ERROR);
 
 			return;
 		}
@@ -810,7 +904,8 @@ namespace KalaData::Core
 		{
 			KalaDataCore::PrintMessage(
 				"Origin '" + canonicalOrigin + "' must be a directory!\n",
-				MessageType::MESSAGETYPE_ERROR);
+				"COMMAND",
+				LogType::LOG_ERROR);
 
 			return;
 		}
@@ -819,7 +914,8 @@ namespace KalaData::Core
 		{
 			KalaDataCore::PrintMessage(
 				"Origin '" + canonicalOrigin + "' must not be an empty directory!\n",
-				MessageType::MESSAGETYPE_ERROR);
+				"COMMAND",
+				LogType::LOG_ERROR);
 
 			return;
 		}
@@ -831,7 +927,8 @@ namespace KalaData::Core
 
 			KalaDataCore::PrintMessage(
 				"Origin '" + canonicalOrigin + "' size '" + convertedOriginSize + "' exceeds max allowed size '5.00GB'!\n",
-				MessageType::MESSAGETYPE_ERROR);
+				"COMMAND",
+				LogType::LOG_ERROR);
 
 			return;
 		}
@@ -840,7 +937,8 @@ namespace KalaData::Core
 		{
 			KalaDataCore::PrintMessage(
 				"Target '" + canonicalTarget + "' already exists!\n",
-				MessageType::MESSAGETYPE_ERROR);
+				"COMMAND",
+				LogType::LOG_ERROR);
 
 			return;
 		}
@@ -849,7 +947,8 @@ namespace KalaData::Core
 		{
 			KalaDataCore::PrintMessage(
 				"Target path '" + canonicalTarget + "' must have the '.kdat' extension!\n",
-				MessageType::MESSAGETYPE_ERROR);
+				"COMMAND",
+				LogType::LOG_ERROR);
 
 			return;
 		}
@@ -859,7 +958,8 @@ namespace KalaData::Core
 		{
 			KalaDataCore::PrintMessage(
 				"Unable to write to target parent directory '" + targetParentFolder + "'!\n",
-				MessageType::MESSAGETYPE_ERROR);
+				"COMMAND",
+				LogType::LOG_ERROR);
 
 			return;
 		}
@@ -880,7 +980,8 @@ namespace KalaData::Core
 		{
 			KalaDataCore::PrintMessage(
 				"Origin '" + canonicalOrigin + "' must be a regular file!\n",
-				MessageType::MESSAGETYPE_ERROR);
+				"COMMAND",
+				LogType::LOG_ERROR);
 
 			return;
 		}
@@ -889,7 +990,8 @@ namespace KalaData::Core
 		{
 			KalaDataCore::PrintMessage(
 				"Origin '" + canonicalOrigin + "' must have the '.kdat' extension!\n",
-				MessageType::MESSAGETYPE_ERROR);
+				"COMMAND",
+				LogType::LOG_ERROR);
 
 			return;
 		}
@@ -898,7 +1000,8 @@ namespace KalaData::Core
 		{
 			KalaDataCore::PrintMessage(
 				"Target directory '" + canonicalTarget + "' does not exist!\n",
-				MessageType::MESSAGETYPE_ERROR);
+				"COMMAND",
+				LogType::LOG_ERROR);
 
 			return;
 		}
@@ -907,7 +1010,8 @@ namespace KalaData::Core
 		{
 			KalaDataCore::PrintMessage(
 				"Target '" + canonicalTarget + "' must be a directory!\n",
-				MessageType::MESSAGETYPE_ERROR);
+				"COMMAND",
+				LogType::LOG_ERROR);
 
 			return;
 		}
@@ -917,7 +1021,8 @@ namespace KalaData::Core
 		{
 			KalaDataCore::PrintMessage(
 				"Unable to write to target parent directory '" + targetParentFolder + "'!\n",
-				MessageType::MESSAGETYPE_ERROR);
+				"COMMAND",
+				LogType::LOG_ERROR);
 
 			return;
 		}
@@ -971,7 +1076,7 @@ string ConvertSizeToString(uint64_t size)
 
 	ss << fixed
 		<< setprecision(2)
-		<< static_cast<double>(size) / (1024ull * 1024 * 1024)
+		<< static_cast<f64>(size) / (1024ull * 1024 * 1024)
 		<< "GB";
 
 	return ss.str();
@@ -1008,7 +1113,8 @@ string ResolvePath(
 		{
 			KalaDataCore::PrintMessage(
 				"Path '" + origin + "' does not exist!\n",
-				MessageType::MESSAGETYPE_ERROR);
+				"COMMAND",
+				LogType::LOG_ERROR);
 
 			return "";
 		}
@@ -1024,7 +1130,9 @@ string ResolvePath(
 	if (KalaDataCore::IsVerboseLoggingEnabled())
 	{
 		KalaDataCore::PrintMessage(
-			"Resolved to path '" + resolved.string() + "'!\n");
+			"Resolved to path '" + resolved.string() + "'!\n",
+			"COMMAND",
+			LogType::LOG_INFO);
 	}
 
 	return weakly_canonical(resolved).string();

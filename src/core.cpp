@@ -17,13 +17,15 @@
 #include "core.hpp"
 #include "command.hpp"
 
-using std::cout;
-using std::clog;
-using std::cerr;
-using std::cin;
+using KalaHeaders::Log;
+using KalaHeaders::TimeFormat;
+using KalaHeaders::DateFormat;
+
 using std::istringstream;
 using std::istream_iterator;
 using std::vector;
+using std::getline;
+using std::cin;
 
 static bool isRunning = false;
 
@@ -35,7 +37,7 @@ namespace KalaData::Core
 
 		while (isRunning)
 		{
-			cout << "KalaData> ";
+			Log::Print("KalaData > ");
 
 			string input;
 			getline(cin, input);
@@ -54,35 +56,53 @@ namespace KalaData::Core
 
 	void KalaDataCore::PrintMessage(
 		const string& message,
-		MessageType type)
+		const string& originStamp,
+		LogType type)
 	{
-		switch (type)
+		if (isVerboseLoggingEnabled)
 		{
-		case MessageType::MESSAGETYPE_LOG:
-			cout << message << "\n";
-			break;
-		case MessageType::MESSAGETYPE_WARNING:
-			clog << "  " << "[WARNING] " << message << "\n";
-			break;
-		case MessageType::MESSAGETYPE_ERROR:
-			cerr << "  " << "[ERROR] " << message << "\n";
-			break;
-		case MessageType::MESSAGETYPE_SUCCESS:
-			cout << "  " << "[SUCCESS] " << message << "\n";
-			break;
-#ifdef _DEBUG
-		case MessageType::MESSAGETYPE_DEBUG:
-			clog << "  " << "[DEBUG] " << message << "\n";
-			break;
-#endif
+			//always force HH:MM:SS:MS time stamp if verbose logging is enabled
+			if (Log::GetDefaultTimeFormat() != TimeFormat::TIME_HMS_MS)
+			{
+				Log::SetDefaultTimeFormat(TimeFormat::TIME_HMS_MS);
+			}
 		}
+		else
+		{
+			//always force no time stamp if verbose logging is disabled
+			if (Log::GetDefaultTimeFormat() != TimeFormat::TIME_NONE)
+			{
+				Log::SetDefaultTimeFormat(TimeFormat::TIME_NONE);
+			}
+		}
+
+		//always force no date stamp
+		if (Log::GetDefaultDateFormat() != DateFormat::DATE_NONE)
+		{
+			Log::SetDefaultDateFormat(DateFormat::DATE_NONE);
+		}
+
+		if (originStamp.empty()) Log::Print(message);
+		else                     Log::Print(message, originStamp, type);
 	}
 
 	void KalaDataCore::ForceClose(const string& title, const string& message)
 	{
+		string shutdownType = "CORE";
+
+		if (title.find("Compression error") != string::npos) shutdownType == "COMPRESS";
+		else if (title.find("Decompression error") != string::npos) shutdownType == "DECOMPRESS";
+
+		else if (title.find("Compression buffer error") != string::npos) shutdownType == "COMPRESS_BUFFER";
+		else if (title.find("Decompression buffer error") != string::npos) shutdownType == "DECOMPRESS_BUFFER";
+
+		else if (title.find("Huffman encode error") != string::npos) shutdownType == "HUFFMAN_ENCODE";
+		else if (title.find("Huffman decode error") != string::npos) shutdownType == "HUFFMAN_DECODE";
+
 		PrintMessage(
 			message,
-			MessageType::MESSAGETYPE_ERROR);
+			shutdownType,
+			LogType::LOG_ERROR);
 
 #ifdef _WIN32
 		int flags =
@@ -139,7 +159,8 @@ namespace KalaData::Core
 		{
 			PrintMessage(
 				"Critical KalaData shutdown!\n",
-				MessageType::MESSAGETYPE_WARNING);
+				"CORE",
+				LogType::LOG_WARNING);
 
 			quick_exit(EXIT_FAILURE);
 			return;
@@ -147,7 +168,8 @@ namespace KalaData::Core
 
 		PrintMessage(
 			"KalaData has shut down normally.\n",
-			MessageType::MESSAGETYPE_DEBUG);
+			"CORE",
+			LogType::LOG_DEBUG);
 
 		exit(0);
 	}

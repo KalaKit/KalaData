@@ -20,7 +20,6 @@
 
 using KalaData::Core::KalaDataCore;
 using KalaData::Core::Command;
-using KalaData::Core::MessageType;
 using KalaData::Core::ForceCloseType;
 using KalaData::Compression::Archive;
 using KalaData::Compression::Token;
@@ -58,38 +57,48 @@ using std::make_unique;
 using std::move;
 
 //Rebuild raw data from tokens list
-static vector<uint8_t> DecompressFromTokens(
+static vector<u8> DecompressFromTokens(
 	const vector<Token>& tokens,
 	size_t originalSize,
 	const string& target);
 
 //Unwrap Huffman stream into LZSS tokens
 static vector<Token> HuffmanDecodeTokens(
-	const vector<uint8_t>& input,
+	const vector<u8>& input,
 	const string& origin);
+
+//Build canonical Huffman codes (literals or lengths) (1 byte)
+static map<u8, u16> CanonicalFromLengths(
+	const u8 codeLen[],
+	size_t count);
+
+//Build canonical Huffman codes (offsets) (4 bytes)
+static map<u32, u16> CanonicalFromLengths32(
+	const u8 codeLen[],
+	size_t count);
 
 //Derialize a code-length table (literals or lengths) from the input stream (1 byte)
 static void ReadCodeLengths(
-	const uint8_t*& ptr,
-	size_t freq[],
+	const u8*& ptr,
+	u8 codeLen[],
 	size_t count);
 
 //Deserialize a frequency table (offsets) from the input stream (4 bytes)
 static void ReadCodeLengths32(
-	const uint8_t*& ptr,
-	map<uint32_t, size_t>& offFreq);
+	const u8*& ptr,
+	map<u32, u8>& codeLen);
 
 //Utility class for reading bit-packed Huffman input stream
 struct BitReader
 {
-	const uint8_t* data;
+	const u8* data;
 	size_t size;
 	size_t pos = 0; //byte index
 	int count = 0;  //remaining bits in buffer
-	uint8_t buffer = 0;
+	u8 buffer = 0;
 
 	BitReader(
-		const uint8_t* d,
+		const u8* d,
 		size_t s) :
 		data(d),
 		size(s) {}
@@ -111,9 +120,9 @@ struct BitReader
 	}
 
 	//Read multiple bits into an integer (canonical Huffman)
-	uint32_t ReadBits(int n)
+	u32 ReadBits(int n)
 	{
-		uint32_t value = 0;
+		u32 value = 0;
 		for (int i = 0; i < n; i++)
 		{
 			int b = ReadBit();
@@ -140,7 +149,9 @@ namespace KalaData::Compression
 		Command::SetCommandAllowState(false);
 
 		KalaDataCore::PrintMessage(
-			"Starting to decompress archive '" + origin + "' to folder '" + target + "'!\n");
+			"Starting to decompress archive '" + origin + "' to folder '" + target + "'!\n",
+			"DECOMPRESS",
+			LogType::LOG_INFO);
 
 		//start clock timer
 		auto start = high_resolution_clock::now();
@@ -155,9 +166,9 @@ namespace KalaData::Compression
 			return;
 		}
 
-		uint32_t compCount{};
-		uint32_t rawCount{};
-		uint32_t emptyCount{};
+		u32 compCount{};
+		u32 rawCount{};
+		u32 emptyCount{};
 
 		//read magic number
 		char magicVer[6]{};
@@ -218,11 +229,14 @@ namespace KalaData::Compression
 				<< "Lookahead is '" << Archive::GetLookAhead() << "'.\n"
 				<< "Min match is '" << MIN_MATCH << "'.\n";
 
-			KalaDataCore::PrintMessage(ss.str());
+			KalaDataCore::PrintMessage(
+				ss.str(),
+				"DECOMPRESS",
+				LogType::LOG_INFO);
 		}
 
-		uint32_t fileCount{};
-		in.read((char*)&fileCount, sizeof(uint32_t));
+		u32 fileCount{};
+		in.read((char*)&fileCount, sizeof(u32));
 		if (fileCount > 100000)
 		{
 			KalaDataCore::ForceCloseByType(
@@ -250,16 +264,16 @@ namespace KalaData::Compression
 			return;
 		}
 
-		for (uint32_t i = 0; i < fileCount; i++)
+		for (u32 i = 0; i < fileCount; i++)
 		{
-			uint32_t pathLen{};
-			in.read((char*)&pathLen, sizeof(uint32_t));
+			u32 pathLen{};
+			in.read((char*)&pathLen, sizeof(u32));
 
 			string relPath(pathLen, '\0');
 			in.read(relPath.data(), pathLen);
 
-			uint8_t method{};
-			in.read((char*)&method, sizeof(uint8_t));
+			u8 method{};
+			in.read((char*)&method, sizeof(u8));
 
 			uint64_t originalSize{};
 			in.read((char*)&originalSize, sizeof(uint64_t));
@@ -340,7 +354,7 @@ namespace KalaData::Compression
 			}
 
 			//prepare output buffer
-			vector<uint8_t> data{};
+			vector<u8> data{};
 			auto storedStart = in.tellg();
 
 			//raw: copy exactly storedSize bytes
@@ -350,7 +364,8 @@ namespace KalaData::Compression
 					&& KalaDataCore::IsVerboseLoggingEnabled())
 				{
 					KalaDataCore::PrintMessage(
-						"[EMPTY] '" + path(relPath).filename().string() + "'");
+						"[EMPTY] '" + path(relPath).filename().string() + "'",
+						"");
 				}
 				else
 				{
@@ -362,7 +377,9 @@ namespace KalaData::Compression
 							<< "' - '" << storedSize << " bytes' "
 							<< ">= '" << originalSize << " bytes'";
 
-						KalaDataCore::PrintMessage(ss.str());
+						KalaDataCore::PrintMessage(
+							ss.str(),
+							"");
 					}
 
 					data.resize(static_cast<size_t>(storedSize));
@@ -387,17 +404,19 @@ namespace KalaData::Compression
 						<< "' - '" << storedSize << " bytes' "
 						<< "< '" << originalSize << " bytes'";
 
-					KalaDataCore::PrintMessage(ss.str());
+					KalaDataCore::PrintMessage(
+						ss.str(),
+						"");
 				}
 
-				vector<uint8_t> compressedBytes(storedSize);
+				vector<u8> compressedBytes(storedSize);
 				in.read(reinterpret_cast<char*>(compressedBytes.data()), storedSize);
 
 				vector<Token> tokens = HuffmanDecodeTokens(
 					compressedBytes,
 					origin);
 
-				vector<uint8_t> data = DecompressFromTokens(
+				vector<u8> data = DecompressFromTokens(
 					tokens,
 					static_cast<size_t>(originalSize),
 					origin);
@@ -436,7 +455,7 @@ namespace KalaData::Compression
 
 		//end timer
 		auto end = high_resolution_clock::now();
-		auto durationSec = duration<double>(end - start).count();
+		auto durationSec = duration<f64>(end - start).count();
 
 		uint64_t folderSize{};
 		for (auto& p : recursive_directory_iterator(target))
@@ -445,10 +464,10 @@ namespace KalaData::Compression
 		}
 
 		auto archiveSize = file_size(origin);
-		auto mbps = static_cast<double>(archiveSize) / (1024.0 * 1024.0) / durationSec;
+		auto mbps = static_cast<f64>(archiveSize) / (1024.0 * 1024.0) / durationSec;
 
-		auto ratio = (static_cast<double>(folderSize) / archiveSize) * 100.0;
-		auto factor = static_cast<double>(folderSize) / archiveSize;
+		auto ratio = (static_cast<f64>(folderSize) / archiveSize) * 100.0;
+		auto factor = static_cast<f64>(folderSize) / archiveSize;
 		auto saved = 100.0 - ratio;
 
 		ostringstream finishDecomp{};
@@ -481,18 +500,19 @@ namespace KalaData::Compression
 
 		KalaDataCore::PrintMessage(
 			finishDecomp.str(),
-			MessageType::MESSAGETYPE_SUCCESS);
+			"DECOMPRESS",
+			LogType::LOG_SUCCESS);
 
 		Command::SetCommandAllowState(true);
 	}
 }
 
-vector<uint8_t> DecompressFromTokens(
+vector<u8> DecompressFromTokens(
 	const vector<Token>& tokens,
 	size_t originalSize,
 	const string& target)
 {
-	vector<uint8_t> output{};
+	vector<u8> output{};
 	output.reserve(originalSize);
 
 	for (const auto& t : tokens)
@@ -548,29 +568,29 @@ vector<uint8_t> DecompressFromTokens(
 }
 
 vector<Token> HuffmanDecodeTokens(
-	const vector<uint8_t>& input,
+	const vector<u8>& input,
 	const string& origin)
 {
 	vector<Token> tokens{};
 	if (input.empty()) return tokens;
 
-	const uint8_t* ptr = input.data();
+	const u8* ptr = input.data();
 
 	//read frequency tables
 
 	size_t litFreq[256]{};
 	size_t lenFreq[256]{};
-	map<uint32_t, size_t> offFreq{};
+	map<u32, size_t> offFreq{};
 
-	ReadTable(ptr, litFreq, 256);
-	ReadTable(ptr, lenFreq, 256);
-	ReadTable32(ptr, offFreq);
+	//ReadTable(ptr, litFreq, 256);
+	//ReadTable(ptr, lenFreq, 256);
+	//ReadTable32(ptr, offFreq);
 
 	//rebuild Huffman trees
 
-	auto litRoot = BuildTree(litFreq, 256);
-	auto lenRoot = BuildTree(lenFreq, 256);
-	auto offRoot = BuildTree32(offFreq);
+	//auto litRoot = BuildTree(litFreq, 256);
+	//auto lenRoot = BuildTree(lenFreq, 256);
+	//auto offRoot = BuildTree32(offFreq);
 
 	BitReader br(ptr, input.size());
 
@@ -579,7 +599,7 @@ vector<Token> HuffmanDecodeTokens(
 		int flag = br.ReadBit();
 		if (flag == 1) //literal
 		{
-			HuffNode* node = litRoot.get();
+			HuffNode* node{};// = litRoot.get();
 
 			while (!node->IsLeaf())
 			{
@@ -606,9 +626,9 @@ vector<Token> HuffmanDecodeTokens(
 		}
 		else //match
 		{
-			uint32_t offset = 0;
+			u32 offset = 0;
 			{
-				HuffNode32* node = offRoot.get();
+				HuffNode32* node{};// = litRoot.get();
 
 				while (!node->IsLeaf())
 				{
@@ -618,9 +638,9 @@ vector<Token> HuffmanDecodeTokens(
 				offset = node->symbol;
 			}
 
-			uint8_t length = 0;
+			u8 length = 0;
 			{
-				HuffNode* node = lenRoot.get();
+				HuffNode* node{};// = litRoot.get();
 
 				while (!node->IsLeaf())
 				{
@@ -643,33 +663,64 @@ vector<Token> HuffmanDecodeTokens(
 	return tokens;
 }
 
-void ReadTable(
-	const uint8_t*& ptr,
-	size_t freq[],
+map<u8, u16> CanonicalFromLengths(
+	const u8 codeLen[],
 	size_t count)
 {
-	//clear output freq
-	fill(freq, freq + count, 0);
+	//count number of codes for each length
 
-	//read node
+	u16 bl_count[33]{}; //support lengths up to 32
+	for (size_t i = 0; i < count; i++)
+	{
+		if (codeLen[i] > 0) bl_count[codeLen[i]]++;
+	}
 
-	uint8_t node = *ptr++;
+	//compute first code for each length
+
+	u16 next_code[33]{};
+	u16 code = 0;
+	for (u8 bits = 1; bits <= 32; bits++)
+	{
+		code = (code + bl_count[bits - 1]) << 1;
+		next_code[bits] = code;
+	}
+
+	//assign codes
+
+	map<u8, u16> table{};
+}
+
+map<u32, u16> CanonicalFromLengths32(
+	const u8 codeLen[],
+	size_t count)
+{
+
+}
+
+void ReadCodeLengths(
+	const u8*& ptr,
+	u8 codeLen[],
+	size_t count)
+{
+	//clear output lengths
+	memset(codeLen, 0, count * sizeof(u8));
+
+	//read mode
+
+	u8 node = *ptr++;
 	if (node == 1)
 	{
 		//sparse
 
-		uint16_t nonZero = 0;
-		memcpy(&nonZero, ptr, sizeof(uint16_t));
-		ptr += sizeof(uint16_t);
+		u16 nonZero = 0;
+		memcpy(&nonZero, ptr, sizeof(u16));
+		ptr += sizeof(u16);
 
-		for (uint16_t i = 0; i < nonZero; i++)
+		for (u16 i = 0; i < nonZero; i++)
 		{
-			uint8_t symbol = *ptr++;
-			uint32_t f = 0;
-			memcpy(&f, ptr, sizeof(uint32_t));
-			ptr += sizeof(uint32_t);
-
-			freq[symbol] = f;
+			u8 symbol = *ptr++;
+			u8 len = *ptr++;
+			codeLen[symbol] = len;
 		}
 	}
 	else
@@ -677,36 +728,32 @@ void ReadTable(
 		//dense
 		for (size_t i = 0; i < count; i++)
 		{
-			uint32_t f = 0;
-			memcpy(&f, ptr, sizeof(uint32_t));
-			ptr += sizeof(uint32_t);
-			freq[i] = f;
+			codeLen[i] = *ptr++;
 		}
 	}
 }
 
-void ReadTable32(
-	const uint8_t*& ptr,
-	map<uint32_t, size_t>& offFreq)
+void ReadCodeLengths32(
+	const u8*& ptr,
+	map<u32, u8>& codeLen)
 {
-	offFreq.clear();
+	codeLen.clear();
 
-	//read count
-	uint32_t nonZero = 0;
-	memcpy(&nonZero, ptr, sizeof(uint32_t));
-	ptr += sizeof(uint32_t);
+	//read number of non-zero code lengths
+	u32 nonZero = 0;
+	memcpy(&nonZero, ptr, sizeof(u32));
+	ptr += sizeof(u32);
 
-	for (uint32_t i = 0; i < nonZero; i++)
+	for (u32 i = 0; i < nonZero; i++)
 	{
-		uint32_t symbol = 0;
-		uint32_t freq = 0;
+		u32 symbol = 0;
+		u8 len = 0;
 
-		memcpy(&symbol, ptr, sizeof(uint32_t));
-		ptr += sizeof(uint32_t);
+		memcpy(&symbol, ptr, sizeof(u32));
+		ptr += sizeof(u32);
 
-		memcpy(&freq, ptr, sizeof(uint32_t));
-		ptr += sizeof(uint32_t);
+		len = *ptr++;
 
-		offFreq[symbol] = freq;
+		if (len > 0) codeLen[symbol] = len;
 	}
 }

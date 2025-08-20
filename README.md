@@ -6,9 +6,9 @@
 
 ![Logo](logo.png)
 
-KalaData is a custom multithreaded compression and decompression CLI written in C++20, built entirely from scratch without external dependencies.
+KalaData is a custom multithreaded compression and decompression library + CLI written in C++20. All data is stored in a dedicated archival format with the `.kdat` extension.
 
-All data is stored in a dedicated archival format with the `.kdat` extension.
+KalaData relies only on a single third party library - KalaHeades - it includes logging and shorthands integral variables.
 
 > Other uses of the `.kdat` extension in unrelated software do not work with KalaData.  
 KalaData archives have their own internal structure, designed specifically for this tool.
@@ -17,7 +17,7 @@ KalaData archives have their own internal structure, designed specifically for t
 - Independent archive format `.kdat`, not based on `ZIP`, `RAR`, `7z` or other archival formats
 - Hybrid compression:
   - LZSS for dictionary-based redundancy removal
-  - Huffman coding for entropy reduction
+  - canonical Huffman coding for entropy reduction
 - Storage modes:
   - Compressed (LZSS + Huffman)
   - Raw (when compression is not effective)
@@ -25,7 +25,6 @@ KalaData archives have their own internal structure, designed specifically for t
 - Verbose logging with detailed per-file reporting.
 - Summary statistics: input and output sizes, ratios, throughput (MB/s), file counts, and total duration
 - Cross-platform support for Windows 10/11 and Linux
-- No third-party libraries; relies only on the C++ Standard Library
 
 ---
 

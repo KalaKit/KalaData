@@ -9,8 +9,13 @@
 #include <map>
 #include <vector>
 
+#include "KalaHeaders/core_types.hpp"
+#include "KalaHeaders/logging.hpp"
+
 namespace KalaData::Compression
 {
+	using KalaHeaders::LogType;
+
 	using std::string;
 	using std::clamp;
 	using std::unique_ptr;
@@ -20,21 +25,21 @@ namespace KalaData::Compression
 	struct Token
 	{
 		bool isLiteral;
-		uint8_t literal;
-		uint32_t offset;
-		uint8_t length;
+		u8 literal;
+		u32 offset;
+		u8 length;
 	};
 
 	//Huffman tree node (1 byte)
 	struct HuffNode
 	{
-		uint8_t symbol;
+		u8 symbol;
 		size_t freq;
 		unique_ptr<HuffNode> left;
 		unique_ptr<HuffNode> right;
 
 		HuffNode(
-			uint8_t s,
+			u8 s,
 			size_t f) :
 			symbol(s),
 			freq(f),
@@ -57,13 +62,13 @@ namespace KalaData::Compression
 	//Huffman tree node (4 bytes)
 	struct HuffNode32
 	{
-		uint32_t symbol;
+		u32 symbol;
 		size_t freq;
 		unique_ptr<HuffNode32> left;
 		unique_ptr<HuffNode32> right;
 
 		HuffNode32(
-			uint32_t s,
+			u32 s,
 			size_t f) :
 			symbol(s),
 			freq(f),

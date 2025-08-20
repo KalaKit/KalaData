@@ -20,7 +20,6 @@
 
 using KalaData::Core::KalaDataCore;
 using KalaData::Core::Command;
-using KalaData::Core::MessageType;
 using KalaData::Core::ForceCloseType;
 using KalaData::Compression::Archive;
 using KalaData::Compression::Token;
@@ -56,11 +55,11 @@ using std::make_unique;
 
 //Generate tokens list from raw data
 static vector<Token> CompressToTokens(
-	const vector<uint8_t>,
+	const vector<u8>,
 	const string& origin);
 
 //Wrap LZSS token output with Huffman
-static vector<uint8_t> HuffmanEncodeTokens(
+static vector<u8> HuffmanEncodeTokens(
 	const vector<Token>& tokens,
 	const string& origin);
 
@@ -68,40 +67,40 @@ static vector<uint8_t> HuffmanEncodeTokens(
 static void BuildCodes(
 	HuffNode* node,
 	const string& prefix,
-	map<uint8_t, string>& codes);
+	map<u8, string>& codes);
 
 //Recursively assign codes (4 bytes)
 static void BuildCodes32(
 	HuffNode32* node,
 	const string& prefix,
-	map<uint32_t, string>& codes);
+	map<u32, string>& codes);
 
 //Build Huffman codes from a fixed-size frequency table (literals or lengths)
-static map<uint8_t, string> BuildHuffman(
+static map<u8, string> BuildHuffman(
 	const size_t freq[],
 	size_t count);
 
 //Build Huffman codes from a sparse frequency table (offsets)
-static map<uint32_t, string> BuildHuffmanMap(
-	const map<uint32_t, size_t>& freqMap);
+static map<u32, string> BuildHuffmanMap(
+	const map<u32, size_t>& freqMap);
 
 //Serializes a frequency table (literals or lengths) into the output stream (1 byte)
 static void WriteTable(
-	vector<uint8_t>& out,
+	vector<u8>& out,
 	const size_t freq[],
 	size_t count);
 
 //Serializes a frequency table (offsets) into the output stream (4 bytes)
 static void WriteTable32(
-	vector<uint8_t>& out,
-	const map<uint32_t, size_t>& offFreq);
+	vector<u8>& out,
+	const map<u32, size_t>& offFreq);
 
 //Utility class for bit-packing Huffman output stream
 struct BitWriter
 {
-	uint8_t buffer = 0;
+	u8 buffer = 0;
 	int count = 0;
-	vector<uint8_t> data;
+	vector<u8> data;
 
 	void WriteBit(int bit)
 	{
@@ -122,7 +121,7 @@ struct BitWriter
 		for (char c : code) { WriteBit(c == '1'); }
 	}
 
-	void Flush(vector<uint8_t>& out)
+	void Flush(vector<u8>& out)
 	{
 		if (count > 0)
 		{
@@ -147,7 +146,9 @@ namespace KalaData::Compression
 		Command::SetCommandAllowState(false);
 
 		KalaDataCore::PrintMessage(
-			"Starting to compress folder '" + origin + "' to archive '" + target + "'!\n");
+			"Starting to compress folder '" + origin + "' to archive '" + target + "'!\n",
+			"COMPRESS",
+			LogType::LOG_INFO);
 
 		//start clock timer
 		auto start = high_resolution_clock::now();
@@ -178,9 +179,9 @@ namespace KalaData::Compression
 			return;
 		}
 
-		uint32_t compCount{};
-		uint32_t rawCount{};
-		uint32_t emptyCount{};
+		u32 compCount{};
+		u32 rawCount{};
+		u32 emptyCount{};
 
 		const char magicVer[6] = { 'K', 'D', 'A', 'T', KALADATA_VERSION[9], KALADATA_VERSION[11] };
 		out.write(magicVer, sizeof(magicVer));
@@ -194,11 +195,14 @@ namespace KalaData::Compression
 				<< "Lookahead is '" << LOOKAHEAD << "'.\n"
 				<< "Min match is '" << MIN_MATCH << "'.\n";
 
-			KalaDataCore::PrintMessage(ss.str());
+			KalaDataCore::PrintMessage(
+				ss.str(),
+				"COMPRESS",
+				LogType::LOG_INFO);
 		}
 
-		uint32_t fileCount = (uint32_t)files.size();
-		out.write((char*)&fileCount, sizeof(uint32_t));
+		u32 fileCount = (u32)files.size();
+		out.write((char*)&fileCount, sizeof(u32));
 
 		if (!out.good())
 		{
@@ -213,26 +217,26 @@ namespace KalaData::Compression
 		{
 			//relative path
 			string relPath = relative(file, origin).string();
-			uint32_t pathLen = (uint32_t)relPath.size();
+			u32 pathLen = (u32)relPath.size();
 
 			//read file into memory
 			ifstream in(file, ios::binary);
-			vector<uint8_t> raw((istreambuf_iterator<char>(in)), {});
+			vector<u8> raw((istreambuf_iterator<char>(in)), {});
 			in.close();
 
 			vector<Token> tokens = CompressToTokens(raw, relPath);
 
-			vector<uint8_t> compData = HuffmanEncodeTokens(tokens, origin);
+			vector<u8> compData = HuffmanEncodeTokens(tokens, origin);
 
 			uint64_t originalSize = raw.size();
 			uint64_t compressedSize = compData.size();
 
 			//safeguard: if compression is bigger or equal than original then store raw instead
 			bool useCompressed = compressedSize < originalSize;
-			const vector<uint8_t>& finalData = useCompressed ? compData : raw;
+			const vector<u8>& finalData = useCompressed ? compData : raw;
 			uint64_t finalSize = useCompressed ? compressedSize : originalSize;
 
-			uint8_t method = useCompressed ? 1 : 0; //0 - raw, 1 - compressed
+			u8 method = useCompressed ? 1 : 0; //0 - raw, 1 - compressed
 
 			if (!useCompressed)
 			{
@@ -243,7 +247,8 @@ namespace KalaData::Compression
 					if (KalaDataCore::IsVerboseLoggingEnabled())
 					{
 						KalaDataCore::PrintMessage(
-							"[EMPTY] '" + path(relPath).filename().string() + "'");
+							"[EMPTY] '" + path(relPath).filename().string() + "'",
+							"");
 					}
 				}
 				else
@@ -258,7 +263,9 @@ namespace KalaData::Compression
 							<< "' - '" << compressedSize << " bytes' "
 							<< ">= '" << originalSize << " bytes'";
 
-						KalaDataCore::PrintMessage(ss.str());
+						KalaDataCore::PrintMessage(
+							ss.str(),
+							"");
 					}
 				}
 			}
@@ -274,14 +281,16 @@ namespace KalaData::Compression
 						<< "' - '" << compressedSize << " bytes' "
 						<< "< '" << originalSize << " bytes'";
 
-					KalaDataCore::PrintMessage(ss.str());
+					KalaDataCore::PrintMessage(
+						ss.str(),
+						"");
 				}
 			}
 
 			//write metadata
-			out.write((char*)&pathLen, sizeof(uint32_t));
+			out.write((char*)&pathLen, sizeof(u32));
 			out.write(relPath.data(), pathLen);
-			out.write((char*)&method, sizeof(uint8_t));
+			out.write((char*)&method, sizeof(u8));
 			out.write((char*)&originalSize, sizeof(uint64_t));
 			out.write((char*)&finalSize, sizeof(uint64_t));
 
@@ -314,7 +323,7 @@ namespace KalaData::Compression
 
 		//end timer
 		auto end = high_resolution_clock::now();
-		auto durationSec = duration<double>(end - start).count();
+		auto durationSec = duration<f64>(end - start).count();
 
 		uint64_t folderSize{};
 		for (auto& p : recursive_directory_iterator(origin))
@@ -323,10 +332,10 @@ namespace KalaData::Compression
 		}
 
 		auto archiveSize = file_size(target);
-		auto mbps = static_cast<double>(folderSize) / (1024.0 * 1024.0) / durationSec;
+		auto mbps = static_cast<f64>(folderSize) / (1024.0 * 1024.0) / durationSec;
 
-		auto ratio = (static_cast<double>(archiveSize) / folderSize) * 100.0;
-		auto factor = static_cast<double>(folderSize) / archiveSize;
+		auto ratio = (static_cast<f64>(archiveSize) / folderSize) * 100.0;
+		auto factor = static_cast<f64>(folderSize) / archiveSize;
 		auto saved = 100.0 - ratio;
 
 		ostringstream finishComp{};
@@ -361,14 +370,15 @@ namespace KalaData::Compression
 
 		KalaDataCore::PrintMessage(
 			finishComp.str(),
-			MessageType::MESSAGETYPE_SUCCESS);
+			"COMPRESS",
+			LogType::LOG_SUCCESS);
 
 		Command::SetCommandAllowState(true);
 	}
 }
 
 vector<Token> CompressToTokens(
-	const vector<uint8_t> input,
+	const vector<u8> input,
 	const string& origin)
 {
 	vector<Token> tokens{};
@@ -429,8 +439,8 @@ vector<Token> CompressToTokens(
 				{
 					false,
 					0,
-					(uint32_t)bestOffset,
-					(uint8_t)bestLength
+					(u32)bestOffset,
+					(u8)bestLength
 				});
 
 			pos += bestLength;
@@ -452,7 +462,7 @@ vector<Token> CompressToTokens(
 	return tokens;
 }
 
-vector<uint8_t> HuffmanEncodeTokens(
+vector<u8> HuffmanEncodeTokens(
 	const vector<Token>& tokens,
 	const string& origin)
 {
@@ -461,7 +471,7 @@ vector<uint8_t> HuffmanEncodeTokens(
 	//build frequency tables
 
 	size_t litFreq[256]{};           //literals
-	map<uint32_t, size_t> offFreq{}; //offsets (variable size)
+	map<u32, size_t> offFreq{}; //offsets (variable size)
 	size_t lenFreq[256]{};           //lengths
 	size_t flagFreq[2]{};            //flags
 
@@ -490,7 +500,7 @@ vector<uint8_t> HuffmanEncodeTokens(
 
 	//serialize header
 
-	vector<uint8_t> output{};
+	vector<u8> output{};
 	WriteTable(output, litFreq, 256);
 	WriteTable(output, lenFreq, 256);
 	WriteTable32(output, offFreq);
@@ -520,7 +530,7 @@ vector<uint8_t> HuffmanEncodeTokens(
 void BuildCodes(
 	HuffNode* node,
 	const string& prefix,
-	map<uint8_t, string>& codes)
+	map<u8, string>& codes)
 {
 	if (!node->left
 		&& !node->right)
@@ -535,7 +545,7 @@ void BuildCodes(
 void BuildCodes32(
 	HuffNode32* node,
 	const string& prefix,
-	map<uint32_t, string>& codes)
+	map<u32, string>& codes)
 {
 	if (!node->left
 		&& !node->right)
@@ -547,7 +557,7 @@ void BuildCodes32(
 	if (node->right) BuildCodes32(node->right.get(), prefix + "1", codes);
 }
 
-map<uint8_t, string> BuildHuffman(
+map<u8, string> BuildHuffman(
 	const size_t freq[],
 	size_t count)
 {
@@ -558,7 +568,7 @@ map<uint8_t, string> BuildHuffman(
 	{
 		if (freq[i] > 0)
 		{
-			pq.push(make_unique<HuffNode>((uint8_t)i, freq[i]));
+			pq.push(make_unique<HuffNode>((u8)i, freq[i]));
 		}
 	}
 
@@ -581,13 +591,13 @@ map<uint8_t, string> BuildHuffman(
 	unique_ptr<HuffNode> root = move(const_cast<unique_ptr<HuffNode>&>(pq.top()));
 
 	//build codes reqursively
-	map<uint8_t, string> codes{};
+	map<u8, string> codes{};
 	BuildCodes(root.get(), "", codes);
 	return codes;
 }
 
-map<uint32_t, string> BuildHuffmanMap(
-	const map<uint32_t, size_t>& freqMap)
+map<u32, string> BuildHuffmanMap(
+	const map<u32, size_t>& freqMap)
 {
 	//priority queue
 	priority_queue<unique_ptr<HuffNode32>, vector<unique_ptr<HuffNode32>>, NodeCompare32> pq{};
@@ -616,24 +626,24 @@ map<uint32_t, string> BuildHuffmanMap(
 	unique_ptr<HuffNode32> root = move(const_cast<unique_ptr<HuffNode32>&>(pq.top()));
 
 	//build codes reqursively
-	map<uint32_t, string> codes{};
+	map<u32, string> codes{};
 	BuildCodes32(root.get(), "", codes);
 	return codes;
 }
 
 void WriteTable(
-	vector<uint8_t>& out,
+	vector<u8>& out,
 	const size_t freq[],
 	size_t count)
 {
-	uint16_t nonZero = 0;
+	u16 nonZero = 0;
 	for (size_t i = 0; i < count; i++)
 	{
 		if (freq[i] > 0) nonZero++;
 	}
 
-	size_t denseSize = count * sizeof(uint32_t);
-	size_t sparseSize = sizeof(uint16_t) + nonZero * (1 + sizeof(uint32_t));
+	size_t denseSize = count * sizeof(u32);
+	size_t sparseSize = sizeof(u16) + nonZero * (1 + sizeof(u32));
 	bool useSparse = (sparseSize < denseSize);
 
 	out.push_back(useSparse ? 1 : 0);
@@ -641,20 +651,20 @@ void WriteTable(
 	if (useSparse)
 	{
 		out.insert(out.end(),
-			reinterpret_cast<const uint8_t*>(&nonZero),
-			reinterpret_cast<const uint8_t*>(&nonZero) + sizeof(uint16_t));
+			reinterpret_cast<const u8*>(&nonZero),
+			reinterpret_cast<const u8*>(&nonZero) + sizeof(u16));
 
 		for (size_t i = 0; i < count; i++)
 		{
 			if (freq[i] > 0)
 			{
-				uint8_t symbol = (uint8_t)i;
-				uint32_t f = (uint32_t)freq[i];
+				u8 symbol = (u8)i;
+				u32 f = (u32)freq[i];
 
 				out.push_back(symbol);
 				out.insert(out.end(),
-					reinterpret_cast<const uint8_t*>(&f),
-					reinterpret_cast<const uint8_t*>(&f) + sizeof(uint32_t));
+					reinterpret_cast<const u8*>(&f),
+					reinterpret_cast<const u8*>(&f) + sizeof(u32));
 			}
 		}
 	}
@@ -664,38 +674,38 @@ void WriteTable(
 		{
 			if (freq[i] > 0)
 			{
-				uint32_t f = (uint32_t)freq[i];
+				u32 f = (u32)freq[i];
 				out.insert(out.end(),
-					reinterpret_cast<const uint8_t*>(&f),
-					reinterpret_cast<const uint8_t*>(&f) + sizeof(uint32_t));
+					reinterpret_cast<const u8*>(&f),
+					reinterpret_cast<const u8*>(&f) + sizeof(u32));
 			}
 		}
 	}
 }
 
 void WriteTable32(
-	vector<uint8_t>& out,
-	const map<uint32_t, size_t>& offFreq)
+	vector<u8>& out,
+	const map<u32, size_t>& offFreq)
 {
-	uint32_t nonZero = (uint32_t)offFreq.size();
+	u32 nonZero = (u32)offFreq.size();
 
 	//write non-zero count (32-bit, offsets can be large)
 	out.insert(out.end(),
-		reinterpret_cast<const uint8_t*>(&nonZero),
-		reinterpret_cast<const uint8_t*>(&nonZero) + sizeof(uint32_t));
+		reinterpret_cast<const u8*>(&nonZero),
+		reinterpret_cast<const u8*>(&nonZero) + sizeof(u32));
 
 	//write each (offset, freq) pair
 	for (auto& [sym, f] : offFreq)
 	{
-		uint32_t symbol = sym;
-		uint32_t freq = (uint32_t)f;
+		u32 symbol = sym;
+		u32 freq = (u32)f;
 
 		out.insert(out.end(),
-			reinterpret_cast<const uint8_t*>(&symbol),
-			reinterpret_cast<const uint8_t*>(&symbol) + sizeof(uint32_t));
+			reinterpret_cast<const u8*>(&symbol),
+			reinterpret_cast<const u8*>(&symbol) + sizeof(u32));
 
 		out.insert(out.end(),
-			reinterpret_cast<const uint8_t*>(&freq),
-			reinterpret_cast<const uint8_t*>(&freq) + sizeof(uint32_t));
+			reinterpret_cast<const u8*>(&freq),
+			reinterpret_cast<const u8*>(&freq) + sizeof(u32));
 	}
 }

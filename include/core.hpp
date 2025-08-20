@@ -5,8 +5,13 @@
 
 #include <string>
 
+#include "KalaHeaders/core_types.hpp"
+#include "KalaHeaders/logging.hpp"
+
 namespace KalaData::Core
 {
+	using KalaHeaders::LogType;
+
 	using std::string;
 
 	enum class ShutdownState
@@ -25,15 +30,6 @@ namespace KalaData::Core
 		TYPE_HUFFMAN_DECODE
 	};
 
-	enum class MessageType
-	{
-		MESSAGETYPE_LOG,
-		MESSAGETYPE_DEBUG,
-		MESSAGETYPE_WARNING,
-		MESSAGETYPE_ERROR,
-		MESSAGETYPE_SUCCESS
-	};
-
 	class KalaDataCore
 	{
 	public:
@@ -47,10 +43,13 @@ namespace KalaData::Core
 		//Print a message to the console with your preferred type
 		static void PrintMessage(
 			const string& message,
-			MessageType type = MessageType::MESSAGETYPE_LOG);
+			const string& originStamp,
+			LogType type = LogType::LOG_INFO);
 
 		//Shut down and close because this is a bad scenario and should never happen
-		static void ForceClose(const string& title, const string& message);
+		static void ForceClose(
+			const string& title,
+			const string& message);
 
 		//Can force close by selected type (type assigns error popup messagebox title)
 		static void ForceCloseByType(

@@ -35,6 +35,7 @@ endif()
 
 # Directory Setup
 set(INCLUDE_DIR "${CMAKE_SOURCE_DIR}/include")
+set(EXT_SHARED_DIR "${CMAKE_SOURCE_DIR}/_external_shared")
 
 # Source Files
 file(GLOB_RECURSE SOURCE_FILES CONFIGURE_DEPENDS
@@ -54,13 +55,13 @@ set_target_properties(KalaData PROPERTIES OUTPUT_NAME "KalaData")
 target_compile_features(KalaData PRIVATE cxx_std_20)
 
 # Includes
-file(GLOB_RECURSE HEADERS
-	configure_depends
+file(GLOB_RECURSE HEADERS configure_depends
 	"${CMAKE_SOURCE_DIR}/include/*.hpp"
 )
 target_sources(KalaData PRIVATE ${HEADERS})
-target_include_directories(KalaData PRIVATE
-	"${INCLUDE_DIR}"
+target_include_directories(KalaData PRIVATE 
+	${INCLUDE_DIR}
+	${EXT_SHARED_DIR}
 )
 
 # Preprocessor Defines

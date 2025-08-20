@@ -6,8 +6,13 @@
 #include <vector>
 #include <string>
 
+#include "KalaHeaders/core_types.hpp"
+#include "KalaHeaders/logging.hpp"
+
 namespace KalaData::Core
 {
+	using KalaHeaders::LogType;
+
 	using std::vector;
 	using std::string;
 
